@@ -1,0 +1,6 @@
+git init
+git branch -M main
+git add .
+git commit -m "Initial NOVA OS website"
+git remote add origin https://github.com/wisemaiarservices-debug/neohaven-nova-os-website.git
+git push -u origin main
