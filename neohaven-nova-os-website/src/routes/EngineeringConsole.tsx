@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity, AlertTriangle, ArrowUpRight, Boxes, CheckCircle2, CircleHelp,
-  Cloud, Code2, Database, ExternalLink, FlaskConical, GitBranch, Layers3,
-  Link2, Plus, RefreshCw, Rocket, Server, ShieldCheck, Workflow
+  Cloud, Database, ExternalLink, FlaskConical, Layers3,
+  Link2, Plus, RefreshCw, Rocket, Server, ShieldCheck
 } from "lucide-react";
 
 type Tab = "overview" | "apis" | "data" | "models" | "deployments";
@@ -143,7 +143,7 @@ export default function EngineeringConsole() {
 function Metric({ label, value, note, icon: Icon, tone = "blue" }: { label: string; value: string; note: string; icon: typeof Activity; tone?: string }) {
   return <article className="nova-metric"><div className="nova-metric-top"><span>{label}</span><span className={`nova-icon tone-${tone}`}><Icon size={17}/></span></div><div className="nova-metric-value">{value}</div><div className="nova-metric-note">{note}</div></article>;
 }
-function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return <section className="nova-panel"><div className="nova-panel-head"><div><h3>{title}</h3>{subtitle && <p>{subtitle}</p>}</div></div>{children}</section>;
 }
 function Status({ children, kind = "good" }: { children: React.ReactNode; kind?: "good" | "warn" | "muted" }) {
