@@ -62,7 +62,7 @@ The public NeoHaven website remains at `/`. The platform has two distinct applic
 The current V1 workbench is intentionally browser-local:
 - API base URLs and non-secret integration metadata are stored in local browser storage.
 - API health checks call the registered endpoint's `/health` route. A successful health check proves reachability only.
-- Data source and dataset entries are catalog metadata; no file ingestion or validation is implied.
+- Data-source and dataset entries are catalog metadata. The local CSV inspector checks headers, row widths and a SHA-256 fingerprint in the browser, then saves metadata only; it does not upload, retain or ingest raw files.
 - Model experiments are specifications only. No model training is claimed or executed.
 - Deployment records are last-known deployment snapshots; open the deployment/product link to verify current status.
 - Do not enter API keys, passwords, tokens, private URLs or other credentials in the browser workbench. Secrets belong in server-side environment variables or a secure secret manager.
