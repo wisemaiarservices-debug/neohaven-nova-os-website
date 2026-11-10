@@ -91,8 +91,10 @@ export default function EngineeringConsole() {
     const link = document.createElement("a");
     link.href = objectUrl;
     link.download = `nova-engineering-workspace-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(objectUrl);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     setNotice("Workspace metadata exported. The file contains no credentials or raw CSV contents.");
   }
 
