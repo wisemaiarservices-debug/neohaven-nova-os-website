@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, BatteryCharging,
   Bell, CheckCircle2, ChevronDown, CircleHelp, Cloud, CloudSun, Cpu, Droplets,
@@ -36,11 +36,11 @@ function Sparkline({ values, color = "#67d6c1" }: { values: number[]; color?: st
   return <svg viewBox="0 0 100 42" preserveAspectRatio="none" className="nova-spark"><polyline points={points} fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>;
 }
 
-function Panel({ title, subtitle, children, action }: { title: string; subtitle?: string; children: React.ReactNode; action?: React.ReactNode }) {
+function Panel({ title, subtitle, children, action }: { title: string; subtitle?: string; children: ReactNode; action?: ReactNode }) {
   return <section className="nova-panel"><div className="nova-panel-head"><div><h3>{title}</h3>{subtitle && <p>{subtitle}</p>}</div>{action}</div>{children}</section>;
 }
 
-function Status({ children, kind = "good" }: { children: React.ReactNode; kind?: "good" | "warn" | "muted" }) {
+function Status({ children, kind = "good" }: { children: ReactNode; kind?: "good" | "warn" | "muted" }) {
   return <span className={`nova-status status-${kind}`}><i/>{children}</span>;
 }
 
