@@ -1,0 +1,35 @@
+name: NOVA dashboard build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "neohaven-nova-os-website/**"
+      - ".github/workflows/dashboard-build.yml"
+  push:
+    branches: [main]
+    paths:
+      - "neohaven-nova-os-website/**"
+      - ".github/workflows/dashboard-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: neohaven-nova-os-website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: neohaven-nova-os-website/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
