@@ -4,7 +4,7 @@
 
 Vercel has rate-limited new preview builds for this team and presents an upgrade-to-Pro notice. No upgrade will be made. Cloudflare Pages Free is the proposed static-hosting target for the Vite NOVA OS and Engineering Console.
 
-Cloudflare's current Pages Free limits include 500 builds per month, one concurrent build, up to 20,000 files per site and 25 MiB per file. Static asset requests are free and unlimited. The deployment workflow in this repository is manual-only and uses Direct Upload through Wrangler; it does not create a Git-integrated Pages project.
+Cloudflare's current Pages Free limits include up to 20,000 files per site and 25 MiB per file; static asset requests are free and unlimited. If using Cloudflare Git-integration builds, the Free plan allows 500 builds per month and one concurrent build. This repository's manual Direct Upload workflow builds in GitHub Actions and uploads the static directory through Wrangler; it does not use Cloudflare's Git build pipeline.
 
 ## One-time account setup
 
