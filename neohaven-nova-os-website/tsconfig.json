@@ -1,5 +1,5 @@
 {
-  "include": ["src/main.tsx", "src/routes/index.tsx", "vite.config.ts"],
+  "include": ["src/main.tsx", "src/routes/index.tsx", "src/routes/Dashboard.tsx", "vite.config.ts"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",
