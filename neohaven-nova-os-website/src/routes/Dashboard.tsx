@@ -180,7 +180,7 @@ function NeoAgro({ values: v, latitude, longitude, setLatitude, setLongitude, da
       <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="Illustrative input · no sensor feed" icon={Droplets} tone="teal"/>
       <Metric label="Air temperature" value={v.temperature.toFixed(1)} unit="°C" note="Illustrative input" icon={ThermometerSun}/>
       <Metric label="Relative humidity" value={String(v.humidity)} unit="%" note="Illustrative input" icon={Waves} tone="blue"/>
-      <Metric label="Rainfall" value={v.rainfall.toFixed(1)} unit="mm" note="Illustrative input" icon={CloudRainIcon} tone="purple"/>
+      <Metric label="Rainfall" value={v.rainfall.toFixed(1)} unit="mm" note="Illustrative input" icon={Cloud} tone="purple"/>
     </div>
     <div className="nova-grid-two">
       <Panel title="Climate data connector" subtitle="NASA POWER daily point data · public provider API">
