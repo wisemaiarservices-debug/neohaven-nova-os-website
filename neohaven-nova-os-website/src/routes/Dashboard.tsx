@@ -8,9 +8,9 @@ import {
 
 type ModuleKey = "overview" | "neoagro" | "neogrid" | "neocell" | "data" | "scenarios";
 const PRODUCT_URLS: Partial<Record<ModuleKey, string>> = {
-  neoagro: "https://neoagro-1xo0l9yif-neo-haven-urban-labs.vercel.app",
-  neocell: "https://neocell-kc1bqu90c-neo-haven-urban-labs.vercel.app",
-  neogrid: "https://neogrid-k9now1nqc-neo-haven-urban-labs.vercel.app",
+  neoagro: "https://neoagro-six.vercel.app",
+  neocell: "https://neocell-ebon.vercel.app",
+  neogrid: "https://neogrid-sigma.vercel.app",
 };
 
 const NAV: { key: ModuleKey; label: string; icon: typeof LayoutDashboard }[] = [
