@@ -36,3 +36,8 @@ The expected preview hostname is `feature-preview.nova-os.pages.dev` after the f
 - This workflow deploys static frontend assets only. It does not deploy NOVA Core API; that has a separate manual Cloudflare Python Worker workflow in the `nova-core` repository.
 - NeoAgro's Next.js application needs a separate hosting assessment; do not point it at this Vite static workflow.
 - Keep Cloudflare on Free. Do not enable paid features or upgrade the plan.
+
+
+## Direct Upload choice
+
+This workflow uses a Direct Upload Pages project so GitHub Actions controls when a deployment happens. Cloudflare documents that a Git-integrated Pages project cannot later be switched to Direct Upload; if you prefer automatic Cloudflare Git previews and builds instead, create a separate Git-integrated project rather than changing this one after setup.
