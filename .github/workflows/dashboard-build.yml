@@ -2,12 +2,12 @@ name: NOVA dashboard build
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/nova-os-live-demo-dashboards]
     paths:
       - "neohaven-nova-os-website/**"
       - ".github/workflows/dashboard-build.yml"
   push:
-    branches: [main]
+    branches: ["**"]
     paths:
       - "neohaven-nova-os-website/**"
       - ".github/workflows/dashboard-build.yml"

@@ -3,10 +3,22 @@ import {
   Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, BatteryCharging,
   Bell, CheckCircle2, ChevronDown, CircleHelp, Cloud, CloudSun, Cpu, Droplets,
   ExternalLink, Factory, Gauge, Leaf, LayoutDashboard, Menu, Network, RefreshCw,
-  Settings2, ShieldCheck, Sprout, Sun, ThermometerSun, Waves, Wind, Zap
+  Server, Settings2, ShieldCheck, Sprout, Sun, ThermometerSun, Waves, Wind, Zap
 } from "lucide-react";
 
 type ModuleKey = "overview" | "neoagro" | "neogrid" | "neocell" | "data" | "scenarios";
+type RegisteredApi = { id: string; name: string; baseUrl: string; owner: string; status?: string; detail?: string };
+const PRODUCT_URLS: Partial<Record<ModuleKey, string>> = {
+  neoagro: "https://neoagro-six.vercel.app",
+  neocell: "https://neocell-ebon.vercel.app",
+  neogrid: "https://neogrid-sigma.vercel.app",
+};
+const PRODUCT_PREVIEW_URLS: Partial<Record<ModuleKey, string>> = {
+  neoagro: "https://neoagro-git-fix-neoagro-provenance-56a89b-neo-haven-urban-labs.vercel.app",
+  neocell: "https://neocell-git-fix-neocell-api-health-52be8d-neo-haven-urban-labs.vercel.app",
+  neogrid: "https://neogrid-git-fix-neogrid-provenance-43da6f-neo-haven-urban-labs.vercel.app",
+};
+
 const NAV: { key: ModuleKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "overview", label: "NOVA Core", icon: LayoutDashboard },
   { key: "neoagro", label: "NeoAgro", icon: Sprout },
@@ -48,6 +60,8 @@ export default function Dashboard() {
   const [active, setActive] = useState<ModuleKey>("overview");
   const [mobileNav, setMobileNav] = useState(false);
   const [apiUrl, setApiUrl] = useState(import.meta.env.VITE_NOVA_API_URL || "");
+  const [apiRegistry, setApiRegistry] = useState<RegisteredApi[]>([]);
+  const [moduleApiStatus, setModuleApiStatus] = useState<Record<string, "checking" | "online" | "offline">>({});
   const [apiState, setApiState] = useState<"unconfigured" | "checking" | "online" | "offline">("unconfigured");
   const [apiMessage, setApiMessage] = useState("Connect a deployed NOVA API to replace demo values with live responses.");
   const [latitude, setLatitude] = useState("");
@@ -63,6 +77,37 @@ export default function Dashboard() {
   // The overview charts and seeded metrics remain demo fixtures even after a separate provider request succeeds.
   // NASA POWER provenance is shown only beside the actual provider response in the NeoAgro inspector.
   const dataLabel = "Illustrative demo values · not field telemetry";
+
+  useEffect(() => {
+    let saved: RegisteredApi[] = [];
+    try {
+      const raw = localStorage.getItem("neohaven.nova.workbench.v1");
+      const parsed = raw ? JSON.parse(raw) : null;
+      saved = Array.isArray(parsed?.apis) ? parsed.apis.filter((item: any) => item && typeof item.baseUrl === "string" && typeof item.owner === "string") : [];
+    } catch {
+      saved = [];
+    }
+    setApiRegistry(saved);
+    const novaCore = saved.find(item => item.owner === "NOVA Core");
+    if (!import.meta.env.VITE_NOVA_API_URL && novaCore?.baseUrl) setApiUrl(novaCore.baseUrl);
+
+    if (!saved.length) return;
+    let cancelled = false;
+    setModuleApiStatus(Object.fromEntries(saved.map(item => [item.owner, "checking" as const])));
+    Promise.all(saved.map(async item => {
+      try {
+        const response = await fetch(item.baseUrl.replace(/\/$/, "") + "/health", { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        await response.json();
+        return [item.owner, "online"] as const;
+      } catch {
+        return [item.owner, "offline"] as const;
+      }
+    })).then(results => {
+      if (!cancelled) setModuleApiStatus(Object.fromEntries(results));
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -110,23 +155,29 @@ export default function Dashboard() {
       <a className="nova-brand" href="/"><span className="nova-brand-mark">N</span><span><b>NeoHaven</b><small>URBAN LABS INC.</small></span></a>
       <div className="nova-workspace"><span className="workspace-dot"/><span><b>NOVA Operations</b><small>DEMO WORKSPACE</small></span><ChevronDown size={14}/></div>
       <div className="nova-nav-label">PLATFORM</div>
-      <nav>{NAV.map(({ key, label, icon: Icon }) => <button key={key} onClick={() => { setActive(key); setMobileNav(false); }} className={active === key ? "active" : ""}><Icon size={17}/><span>{label}</span>{key === "overview" && <i className="nav-live"/>}</button>)}</nav>
+      <nav>{NAV.map(({ key, label, icon: Icon }) => {
+        const productUrl = PRODUCT_URLS[key];
+        return productUrl ? <div className={`nova-nav-product ${active === key ? "active" : ""}`} key={key}>
+          <a href={productUrl} target="_blank" rel="noreferrer" title={`Open standalone ${label} product`}><Icon size={17}/><span>{label}</span><ExternalLink size={12}/></a>
+          <button className="nova-nav-use" onClick={() => { setActive(key); setMobileNav(false); }}>Use in NOVA OS</button>
+        </div> : <button key={key} onClick={() => { setActive(key); setMobileNav(false); }} className={active === key ? "active" : ""}><Icon size={17}/><span>{label}</span>{key === "overview" && <i className="nav-live"/>}</button>;
+      })}</nav>
       <div className="nova-sidebar-bottom"><div className="nova-help"><CircleHelp size={17}/><span><b>Need a hand?</b><small>Read the platform guide</small></span><ExternalLink size={13}/></div><div className="nova-user"><div className="nova-avatar">NH</div><span><b>NeoHaven Operator</b><small>Read-only demo access</small></span><Settings2 size={16}/></div></div>
     </aside>
     <main className="nova-main">
-      <header className="nova-topbar"><button className="nova-mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu/></button><div className="nova-breadcrumb">Workspace <span>/</span> <b>{NAV.find(n => n.key === active)?.label}</b></div><div className="nova-top-actions"><span className="nova-env"><i/> DEMO ENVIRONMENT</span><button className="nova-bell" aria-label="Notifications"><Bell size={17}/><i/></button><div className="nova-avatar small">NH</div></div></header>
+      <header className="nova-topbar"><button className="nova-mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu/></button><div className="nova-breadcrumb">Workspace <span>/</span> <b>{NAV.find(n => n.key === active)?.label}</b></div><div className="nova-top-actions"><a className="nova-button" href="/console">Engineering console <ExternalLink size={12}/></a><span className="nova-env"><i/> DEMO ENVIRONMENT</span><button className="nova-bell" aria-label="Notifications"><Bell size={17}/><i/></button><div className="nova-avatar small">NH</div></div></header>
       <div className="nova-content">
-        <div className="nova-page-heading"><div><div className="nova-eyebrow">NOVA OS <span>•</span> INTELLIGENCE CONSOLE</div><h1>{NAV.find(n => n.key === active)?.label}</h1><p>{active === "overview" ? "A unified operational view across agriculture, energy and connected infrastructure." : pageDescription(active)}</p></div><div className="nova-heading-actions"><Status kind={apiState === "online" ? "good" : apiState === "offline" ? "warn" : "muted"}>{apiState === "online" ? "API connected" : apiState === "offline" ? "API offline" : "Demo mode"}</Status><button className="nova-button" onClick={checkApi}><RefreshCw size={14}/> Check connection</button></div></div>
+        <div className="nova-page-heading"><div><div className="nova-eyebrow">NOVA OS <span>•</span> INTELLIGENCE CONSOLE</div><h1>{NAV.find(n => n.key === active)?.label}</h1><p>{active === "overview" ? "A unified operational view across agriculture, energy and connected infrastructure." : pageDescription(active)}</p></div><div className="nova-heading-actions">{PRODUCT_URLS[active] && <><Status kind={moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "online" ? "good" : moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "offline" ? "warn" : "muted"}>{moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "online" ? "Module API reachable" : moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "offline" ? "Module API offline" : "No module API registered"}</Status><a className="nova-button" href={PRODUCT_URLS[active]} target="_blank" rel="noreferrer">Open production product <ExternalLink size={12}/></a><a className="nova-button" href={PRODUCT_PREVIEW_URLS[active] || PRODUCT_URLS[active]} target="_blank" rel="noreferrer">Open updated preview <ExternalLink size={12}/></a></>}<Status kind={apiState === "online" ? "good" : apiState === "offline" ? "warn" : "muted"}>{apiState === "online" ? "API connected" : apiState === "offline" ? "API offline" : "Demo mode"}</Status><button className="nova-button" onClick={checkApi}><RefreshCw size={14}/> Check connection</button></div></div>
 
         <div className="nova-notice"><div className="notice-icon"><AlertTriangle size={16}/></div><div><b>Demonstration workspace</b><span>Displayed operational metrics are illustrative sample values until connected to verified site sensors or provider data. Recommendations are advisory and require operator review.</span></div><span className="notice-tag">PROVENANCE AWARE</span></div>
 
-        {active === "overview" && <Overview values={DEMO} chartValues={chartValues} dataLabel={dataLabel} apiUrl={apiUrl} setApiUrl={setApiUrl} apiMessage={apiMessage} apiState={apiState} onCheck={checkApi}/>}
+        {active === "overview" && <Overview values={DEMO} chartValues={chartValues} dataLabel={dataLabel} apiUrl={apiUrl} setApiUrl={setApiUrl} apiMessage={apiMessage} apiState={apiState} onCheck={checkApi} apiRegistry={apiRegistry} moduleApiStatus={moduleApiStatus}/>}
         {active === "neoagro" && <NeoAgro values={DEMO} latitude={latitude} longitude={longitude} setLatitude={setLatitude} setLongitude={setLongitude} days={days} setDays={setDays} onLoad={loadWeather} weather={weather} weatherState={weatherState} weatherError={weatherError}/>}
         {active === "neogrid" && <NeoGrid values={DEMO}/>}
         {active === "neocell" && <NeoCell values={DEMO}/>}
         {active === "data" && <DataPanel apiUrl={apiUrl} setApiUrl={setApiUrl} apiState={apiState} apiMessage={apiMessage} onCheck={checkApi} dataLabel={dataLabel}/>}
         {active === "scenarios" && <Scenarios scenario={scenario} setScenario={setScenario} value={scenarioValue} setValue={setScenarioValue}/>}
-        <footer className="nova-footer"><span>© 2026 NeoHaven Urban Labs Inc. · NOVA Core V1</span><span>Decision support only <i/> Human approval required</span></footer>
+        <footer className="nova-footer"><span>© 2026 NeoHaven Urban Labs Inc. · NOVA OS V1</span><span><a href="/console">Engineering Console</a> · Decision support only <i/> Human approval required</span></footer>
       </div>
     </main>
   </div>;
@@ -136,7 +187,7 @@ function pageDescription(key: ModuleKey) {
   return ({ neoagro: "Climate, soil and irrigation intelligence for agricultural operations.", neogrid: "Renewable generation, storage and site energy monitoring.", neocell: "Connected assets, gateway health and infrastructure observability.", data: "Trace every value to its source, method, timestamp and verification state.", scenarios: "Explore transparent what-if assumptions without inventing predicted outcomes." } as Record<string, string>)[key] || "";
 }
 
-function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMessage, apiState, onCheck }: any) {
+function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMessage, apiState, onCheck, apiRegistry, moduleApiStatus }: any) {
   return <>
     <div className="nova-metrics-grid">
       <Metric label="Ambient temperature" value={v.temperature.toFixed(1)} unit="°C" note="Illustrative site input" icon={ThermometerSun}/>
@@ -158,6 +209,10 @@ function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMes
         <div className="nova-progress"><span style={{width:"67%"}}/></div><div className="nova-chart-foot"><span>Battery SOC illustration</span><span>67%</span></div>
       </Panel>
     </div>
+    <Panel title="Registered module connections" subtitle="API registry shared with the Engineering Console · health checks only">
+      {apiRegistry.length ? apiRegistry.map((api: RegisteredApi) => <div className="resource-row" key={api.id}><div className="resource-icon blue"><Network size={16}/></div><div className="resource-info"><b>{api.name}</b><small>{api.owner} · {api.baseUrl}</small></div><Status kind={moduleApiStatus[api.owner] === "online" ? "good" : moduleApiStatus[api.owner] === "offline" ? "warn" : "muted"}>{moduleApiStatus[api.owner] === "online" ? "API reachable" : moduleApiStatus[api.owner] === "offline" ? "Unreachable" : "Checking"}</Status></div>) : <div className="nova-empty"><Server size={22}/><b>No module APIs registered</b><span>Register NOVA Core, NeoAgro, NeoCell or NeoGrid endpoints in the Engineering Console. Only non-secret base URLs belong in this registry.</span><a className="nova-button" href="/console">Open Engineering Console <ExternalLink size={12}/></a></div>}
+      <div className="nova-chart-foot"><span>API reachability does not verify telemetry, calibration or data quality.</span><a href="/console">Manage connections</a></div>
+    </Panel>
     <div className="nova-grid-two lower-grid">
       <Panel title="Operational flags" subtitle="Rule-based screening · not validated diagnosis">
         <div className="flag-row"><span className="flag-icon warn"><AlertTriangle size={16}/></span><div><b>Soil moisture screening flag</b><small>34% is below the provisional 35% rule threshold. Crop, soil and sensor calibration context required.</small></div><Status kind="warn">Review</Status></div>
