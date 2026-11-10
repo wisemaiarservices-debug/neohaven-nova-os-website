@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, BatteryCharging,
   Bell, CheckCircle2, ChevronDown, CircleHelp, Cloud, CloudSun, Cpu, Droplets,
   ExternalLink, Factory, Gauge, Leaf, LayoutDashboard, Menu, Network, RefreshCw,
-  Settings2, ShieldCheck, Sprout, Sun, ThermometerSun, Waves, Wind, Zap
+  Server, Settings2, ShieldCheck, Sprout, Sun, ThermometerSun, Waves, Wind, Zap
 } from "lucide-react";
 
 type ModuleKey = "overview" | "neoagro" | "neogrid" | "neocell" | "data" | "scenarios";
