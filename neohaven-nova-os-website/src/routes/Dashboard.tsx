@@ -7,6 +7,12 @@ import {
 } from "lucide-react";
 
 type ModuleKey = "overview" | "neoagro" | "neogrid" | "neocell" | "data" | "scenarios";
+const PRODUCT_URLS: Partial<Record<ModuleKey, string>> = {
+  neoagro: "https://neoagro-1xo0l9yif-neo-haven-urban-labs.vercel.app",
+  neocell: "https://neocell-kc1bqu90c-neo-haven-urban-labs.vercel.app",
+  neogrid: "https://neogrid-k9now1nqc-neo-haven-urban-labs.vercel.app",
+};
+
 const NAV: { key: ModuleKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "overview", label: "NOVA Core", icon: LayoutDashboard },
   { key: "neoagro", label: "NeoAgro", icon: Sprout },
@@ -110,13 +116,19 @@ export default function Dashboard() {
       <a className="nova-brand" href="/"><span className="nova-brand-mark">N</span><span><b>NeoHaven</b><small>URBAN LABS INC.</small></span></a>
       <div className="nova-workspace"><span className="workspace-dot"/><span><b>NOVA Operations</b><small>DEMO WORKSPACE</small></span><ChevronDown size={14}/></div>
       <div className="nova-nav-label">PLATFORM</div>
-      <nav>{NAV.map(({ key, label, icon: Icon }) => <button key={key} onClick={() => { setActive(key); setMobileNav(false); }} className={active === key ? "active" : ""}><Icon size={17}/><span>{label}</span>{key === "overview" && <i className="nav-live"/>}</button>)}</nav>
+      <nav>{NAV.map(({ key, label, icon: Icon }) => {
+        const productUrl = PRODUCT_URLS[key];
+        return productUrl ? <div className={`nova-nav-product ${active === key ? "active" : ""}`} key={key}>
+          <a href={productUrl} target="_blank" rel="noreferrer" title={`Open standalone ${label} product`}><Icon size={17}/><span>{label}</span><ExternalLink size={12}/></a>
+          <button className="nova-nav-use" onClick={() => { setActive(key); setMobileNav(false); }}>Use in NOVA OS</button>
+        </div> : <button key={key} onClick={() => { setActive(key); setMobileNav(false); }} className={active === key ? "active" : ""}><Icon size={17}/><span>{label}</span>{key === "overview" && <i className="nav-live"/>}</button>;
+      })}</nav>
       <div className="nova-sidebar-bottom"><div className="nova-help"><CircleHelp size={17}/><span><b>Need a hand?</b><small>Read the platform guide</small></span><ExternalLink size={13}/></div><div className="nova-user"><div className="nova-avatar">NH</div><span><b>NeoHaven Operator</b><small>Read-only demo access</small></span><Settings2 size={16}/></div></div>
     </aside>
     <main className="nova-main">
-      <header className="nova-topbar"><button className="nova-mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu/></button><div className="nova-breadcrumb">Workspace <span>/</span> <b>{NAV.find(n => n.key === active)?.label}</b></div><div className="nova-top-actions"><span className="nova-env"><i/> DEMO ENVIRONMENT</span><button className="nova-bell" aria-label="Notifications"><Bell size={17}/><i/></button><div className="nova-avatar small">NH</div></div></header>
+      <header className="nova-topbar"><button className="nova-mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu/></button><div className="nova-breadcrumb">Workspace <span>/</span> <b>{NAV.find(n => n.key === active)?.label}</b></div><div className="nova-top-actions"><a className="nova-button" href="/console">Engineering console <ExternalLink size={12}/></a><span className="nova-env"><i/> DEMO ENVIRONMENT</span><button className="nova-bell" aria-label="Notifications"><Bell size={17}/><i/></button><div className="nova-avatar small">NH</div></div></header>
       <div className="nova-content">
-        <div className="nova-page-heading"><div><div className="nova-eyebrow">NOVA OS <span>•</span> INTELLIGENCE CONSOLE</div><h1>{NAV.find(n => n.key === active)?.label}</h1><p>{active === "overview" ? "A unified operational view across agriculture, energy and connected infrastructure." : pageDescription(active)}</p></div><div className="nova-heading-actions"><Status kind={apiState === "online" ? "good" : apiState === "offline" ? "warn" : "muted"}>{apiState === "online" ? "API connected" : apiState === "offline" ? "API offline" : "Demo mode"}</Status><button className="nova-button" onClick={checkApi}><RefreshCw size={14}/> Check connection</button></div></div>
+        <div className="nova-page-heading"><div><div className="nova-eyebrow">NOVA OS <span>•</span> INTELLIGENCE CONSOLE</div><h1>{NAV.find(n => n.key === active)?.label}</h1><p>{active === "overview" ? "A unified operational view across agriculture, energy and connected infrastructure." : pageDescription(active)}</p></div><div className="nova-heading-actions">{PRODUCT_URLS[active] && <a className="nova-button" href={PRODUCT_URLS[active]} target="_blank" rel="noreferrer">Open standalone product <ExternalLink size={12}/></a>}<Status kind={apiState === "online" ? "good" : apiState === "offline" ? "warn" : "muted"}>{apiState === "online" ? "API connected" : apiState === "offline" ? "API offline" : "Demo mode"}</Status><button className="nova-button" onClick={checkApi}><RefreshCw size={14}/> Check connection</button></div></div>
 
         <div className="nova-notice"><div className="notice-icon"><AlertTriangle size={16}/></div><div><b>Demonstration workspace</b><span>Displayed operational metrics are illustrative sample values until connected to verified site sensors or provider data. Recommendations are advisory and require operator review.</span></div><span className="notice-tag">PROVENANCE AWARE</span></div>
 
@@ -126,7 +138,7 @@ export default function Dashboard() {
         {active === "neocell" && <NeoCell values={DEMO}/>}
         {active === "data" && <DataPanel apiUrl={apiUrl} setApiUrl={setApiUrl} apiState={apiState} apiMessage={apiMessage} onCheck={checkApi} dataLabel={dataLabel}/>}
         {active === "scenarios" && <Scenarios scenario={scenario} setScenario={setScenario} value={scenarioValue} setValue={setScenarioValue}/>}
-        <footer className="nova-footer"><span>© 2026 NeoHaven Urban Labs Inc. · NOVA Core V1</span><span>Decision support only <i/> Human approval required</span></footer>
+        <footer className="nova-footer"><span>© 2026 NeoHaven Urban Labs Inc. · NOVA OS V1</span><span><a href="/console">Engineering Console</a> · Decision support only <i/> Human approval required</span></footer>
       </div>
     </main>
   </div>;
