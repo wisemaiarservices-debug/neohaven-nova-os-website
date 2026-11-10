@@ -48,3 +48,38 @@ dist
 ## Recommended Free Hosting
 
 Vercel is the simplest default for this static investor-facing site. Cloudflare Pages is also a strong option if DNS and edge performance are the priority.
+
+
+## NOVA Operations Console
+
+The public website remains at `/`. The operational demonstration console is available at `/console` after deployment.
+
+The console includes:
+- NOVA Core overview and screening flags
+- NeoAgro climate connector interface for the NOVA NASA POWER daily endpoint
+- NeoGrid energy system view
+- NeoCell connected infrastructure view
+- Data provenance and verification panel
+- Assumption-only scenario exploration
+
+### Vercel project configuration
+
+This repository contains the Vite application in the `neohaven-nova-os-website` subdirectory. Configure the Vercel project with:
+
+- Root Directory: `neohaven-nova-os-website`
+- Framework Preset: Vite
+- Install Command: `pnpm install --frozen-lockfile`
+- Build Command: `pnpm build`
+- Output Directory: `dist`
+
+The included `vercel.json` rewrite keeps direct navigation and refreshes on `/console` working.
+
+### Optional API connection
+
+Set `VITE_NOVA_API_URL` to the public base URL of the deployed NOVA Core API. The browser console checks `/health` and uses the existing `/api/v1/data/weather/nasa-power/daily` endpoint when a user supplies coordinates.
+
+The API must explicitly allow the dashboard origin through CORS. Do not put secrets in `VITE_*` variables: Vite exposes them to browser users. Keep private credentials in server-side environment variables only.
+
+### Data integrity
+
+All seeded dashboard metrics are illustrative UI fixtures, not actual site telemetry. NASA POWER is gridded/model-derived data and must not be described as a ground-station measurement. The scenario controls currently capture assumptions only; they do not calculate forecasts, optimized dispatch, savings or engineering recommendations. Human review remains mandatory.
