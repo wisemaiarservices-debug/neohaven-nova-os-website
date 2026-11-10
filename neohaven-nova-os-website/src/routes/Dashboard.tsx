@@ -60,7 +60,9 @@ export default function Dashboard() {
   const [scenarioValue, setScenarioValue] = useState(20);
 
   const isLive = apiState === "online";
-  const dataLabel = weatherState === "loaded" ? "NASA POWER · gridded daily data" : "Illustrative demo values · not field telemetry";
+  // The overview charts and seeded metrics remain demo fixtures even after a separate provider request succeeds.
+  // NASA POWER provenance is shown only beside the actual provider response in the NeoAgro inspector.
+  const dataLabel = "Illustrative demo values · not field telemetry";
 
   useEffect(() => {
     if (!apiUrl) return;
