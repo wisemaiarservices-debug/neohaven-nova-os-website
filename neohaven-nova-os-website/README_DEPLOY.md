@@ -50,17 +50,27 @@ dist
 Vercel is the simplest default for this static investor-facing site. Cloudflare Pages is also a strong option if DNS and edge performance are the priority.
 
 
-## NOVA Operations Console
+## NOVA Platform Routes
 
-The public website remains at `/`. The operational demonstration console is available at `/console` after deployment.
+The public NeoHaven website remains at `/`. The platform has two distinct application surfaces:
 
-The console includes:
-- NOVA Core overview and screening flags
-- NeoAgro climate connector interface for the NOVA NASA POWER daily endpoint
-- NeoGrid energy system view
-- NeoCell connected infrastructure view
-- Data provenance and verification panel
-- Assumption-only scenario exploration
+- `/console` — **NOVA Engineering Console**. Internal workbench for API endpoint registration and health checks, data-source and dataset cataloguing, model experiment specifications, and deployment inspection.
+- `/os` — **NOVA OS**. Operational system linking NOVA Core with NeoAgro, NeoCell and NeoGrid. Each module can be opened as a standalone product or used as an embedded module inside NOVA OS.
+
+### Engineering Console scope and safety
+
+The current V1 workbench is intentionally browser-local:
+- API base URLs and non-secret integration metadata are stored in local browser storage.
+- API health checks call the registered endpoint's `/health` route. A successful health check proves reachability only.
+- Data source and dataset entries are catalog metadata; no file ingestion or validation is implied.
+- Model experiments are specifications only. No model training is claimed or executed.
+- Deployment records are last-known deployment snapshots; open the deployment/product link to verify current status.
+- Do not enter API keys, passwords, tokens, private URLs or other credentials in the browser workbench. Secrets belong in server-side environment variables or a secure secret manager.
+- Training runners, shared database persistence, CI artifact ingestion and deployment promotion require secure backend integrations. Production promotion remains subject to human approval.
+
+### NOVA OS module navigation
+
+The NOVA OS sidebar opens the standalone NeoAgro, NeoCell and NeoGrid products in a new tab. The adjacent **Use in NOVA OS** action opens the embedded module view within the operational system. This preserves both standalone product use and cross-module operations in NOVA OS.
 
 ### Vercel project configuration
 
@@ -72,14 +82,14 @@ This repository contains the Vite application in the `neohaven-nova-os-website` 
 - Build Command: `pnpm build`
 - Output Directory: `dist`
 
-The included `vercel.json` rewrite keeps direct navigation and refreshes on `/console` working.
+The SPA rewrite supports direct navigation and refresh on `/console` and `/os`.
 
-### Optional API connection
+### NOVA Core API connection
 
-Set `VITE_NOVA_API_URL` to the public base URL of the deployed NOVA Core API. The browser console checks `/health` and uses the existing `/api/v1/data/weather/nasa-power/daily` endpoint when a user supplies coordinates.
+The NOVA OS NeoAgro connector uses the existing `/api/v1/data/weather/nasa-power/daily` endpoint when a user supplies site coordinates. The API must allow the dashboard origin through CORS.
 
-The API must explicitly allow the dashboard origin through CORS. Do not put secrets in `VITE_*` variables: Vite exposes them to browser users. Keep private credentials in server-side environment variables only.
+Do not put secrets in `VITE_*` variables: Vite exposes them to browser users. Keep private credentials server-side.
 
 ### Data integrity
 
-All seeded dashboard metrics are illustrative UI fixtures, not actual site telemetry. NASA POWER is gridded/model-derived data and must not be described as a ground-station measurement. The scenario controls currently capture assumptions only; they do not calculate forecasts, optimized dispatch, savings or engineering recommendations. Human review remains mandatory.
+All seeded operational metrics are illustrative UI fixtures, not actual site telemetry. NASA POWER values are gridded/model-derived data, not ground-station measurements. Scenario controls capture assumptions only; they do not calculate forecasts, optimized dispatch, savings or engineering recommendations. Human review remains mandatory.
