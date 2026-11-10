@@ -93,3 +93,8 @@ Do not put secrets in `VITE_*` variables: Vite exposes them to browser users. Ke
 ### Data integrity
 
 All seeded operational metrics are illustrative UI fixtures, not actual site telemetry. NASA POWER values are gridded/model-derived data, not ground-station measurements. Scenario controls capture assumptions only; they do not calculate forecasts, optimized dispatch, savings or engineering recommendations. Human review remains mandatory.
+
+
+### Shared browser-local API registry
+
+The Engineering Console and NOVA OS use the same `neohaven.nova.workbench.v1` browser-local registry. Navigate between `/console` and `/os` on the same hostname (the internal links do this automatically) so both routes can read the same localStorage records. Different preview or production hostnames have separate browser storage. This V1 registry is not shared across users or devices; a secure shared backend is a later phase.
