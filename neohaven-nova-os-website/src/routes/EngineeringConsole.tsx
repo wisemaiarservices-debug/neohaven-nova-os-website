@@ -13,10 +13,10 @@ type ExperimentRecord = { id: string; name: string; module: string; method: stri
 
 const STORAGE_KEY = "neohaven.nova.workbench.v1";
 const DEPLOYMENTS = [
-  { name: "NOVA OS", url: "https://nova-cpbk47876-neo-haven-urban-labs.vercel.app/os", status: "READY", kind: "Preview", repo: "neohaven-nova-os-website", sha: "30cd232" },
-  { name: "NeoAgro", url: "https://neoagro-1xo0l9yif-neo-haven-urban-labs.vercel.app", status: "READY", kind: "Production", repo: "neoagro-platform", sha: "d86a367" },
-  { name: "NeoCell", url: "https://neocell-kc1bqu90c-neo-haven-urban-labs.vercel.app", status: "READY", kind: "Production", repo: "neocell-platform", sha: "92803df" },
-  { name: "NeoGrid", url: "https://neogrid-k9now1nqc-neo-haven-urban-labs.vercel.app", status: "READY", kind: "Production", repo: "neogrid-platform", sha: "e829e71" },
+  { name: "NOVA OS", url: "https://nova-3p1ap1t2d-neo-haven-urban-labs.vercel.app/os", status: "READY", kind: "Preview", repo: "neohaven-nova-os-website", sha: "2d2d742" },
+  { name: "NeoAgro", url: "https://neoagro-six.vercel.app", status: "READY", kind: "Production", repo: "neoagro-platform", sha: "d86a367" },
+  { name: "NeoCell", url: "https://neocell-ebon.vercel.app", status: "READY", kind: "Production", repo: "neocell-platform", sha: "92803df" },
+  { name: "NeoGrid", url: "https://neogrid-sigma.vercel.app", status: "READY", kind: "Production", repo: "neogrid-platform", sha: "e829e71" },
 ];
 
 const NAV: { id: Tab; label: string; icon: typeof Activity }[] = [
