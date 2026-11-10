@@ -266,3 +266,9 @@
   .workbench-shell .nova-topbar{padding:0 12px}
   .workbench-shell .nova-content{padding:20px 12px}
 }
+
+.workbench-csv-upload{max-width:620px}
+.csv-preview{margin-top:12px;padding:12px;border:1px solid #29434b;border-radius:7px;background:#0e1b27}
+.csv-headers{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.csv-headers span{padding:5px 8px;border:1px solid #2a4653;border-radius:5px;background:#162a36;color:#a8d8ce;font-size:9px}
+.csv-preview .nova-button{margin-top:4px}
