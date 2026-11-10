@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity, AlertTriangle, ArrowUpRight, Boxes, CheckCircle2, CircleHelp,
   Cloud, Database, ExternalLink, FlaskConical, Layers3,
-  Link2, Plus, RefreshCw, Rocket, Server, ShieldCheck
+  Download, Link2, Plus, RefreshCw, Rocket, Server, ShieldCheck
 } from "lucide-react";
 
 type Tab = "overview" | "apis" | "data" | "models" | "deployments";
@@ -76,6 +76,24 @@ export default function EngineeringConsole() {
     if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") { setNotice("Use HTTPS for remote API endpoints. HTTP is accepted only for localhost development."); return; }
     setStore(s => ({ ...s, apis: [...s.apis, { id: uid(), name: apiName.trim(), baseUrl: parsed.toString().replace(/\/$/, ""), owner: apiOwner, status: "untested", detail: "Not tested yet" }] }));
     setApiName(""); setApiUrl(""); setNotice("API endpoint registered locally. Run a health check to verify reachability.");
+  }
+
+  function exportWorkspace() {
+    const payload = {
+      schema_version: 1,
+      exported_at: new Date().toISOString(),
+      storage_scope: "browser-local",
+      warning: "Configuration metadata only. No credentials or raw CSV contents are included.",
+      ...store,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = `nova-engineering-workspace-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+    setNotice("Workspace metadata exported. The file contains no credentials or raw CSV contents.");
   }
 
   async function testApi(api: ApiRecord) {
@@ -164,7 +182,7 @@ export default function EngineeringConsole() {
       <div className="nova-sidebar-bottom"><a className="workbench-os-link" href="/os"><Activity size={16}/> Open NOVA OS <ArrowUpRight size={14}/></a><div className="nova-user"><div className="nova-avatar">NH</div><span><b>NeoHaven Operator</b><small>Engineering access</small></span><ShieldCheck size={16}/></div></div>
     </aside>
     <main className="nova-main">
-      <header className="nova-topbar"><div className="nova-breadcrumb">NeoHaven <span>/</span> <b>Engineering Console</b></div><div className="nova-top-actions"><span className="nova-env"><i/> INTERNAL WORKSPACE</span><a className="nova-button" href="/os">Open NOVA OS <ArrowUpRight size={13}/></a></div></header>
+      <header className="nova-topbar"><div className="nova-breadcrumb">NeoHaven <span>/</span> <b>Engineering Console</b></div><div className="nova-top-actions"><span className="nova-env"><i/> INTERNAL WORKSPACE</span><button className="nova-button" onClick={exportWorkspace}><Download size={13}/> Export config</button><a className="nova-button" href="/os">Open NOVA OS <ArrowUpRight size={13}/></a></div></header>
       <div className="nova-content">
         <div className="nova-page-heading"><div><div className="nova-eyebrow">NOVA PLATFORM <span>•</span> BUILD / CONNECT / VERIFY</div><h1>{NAV.find(n => n.id === tab)?.label}</h1><p>Configure integrations, register evidence, prepare experiments and inspect deployments.</p></div><span className="nova-status status-muted">Control plane · V1</span></div>
         <div className="nova-notice"><div className="notice-icon"><AlertTriangle size={16}/></div><div><b>Safe engineering mode</b><span>API URLs and catalog metadata are saved in this browser only. Never enter API keys, passwords, tokens or private credentials here. Training and deployment actions remain disabled until secure backend runners are connected.</span></div><span className="notice-tag">NO SECRETS</span></div>
