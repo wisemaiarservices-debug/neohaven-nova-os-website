@@ -54,6 +54,8 @@ export default function EngineeringConsole() {
   const [experimentModule, setExperimentModule] = useState("NOVA Core");
   const [experimentMethod, setExperimentMethod] = useState("Baseline evaluation");
   const [experimentDataset, setExperimentDataset] = useState("");
+  const [csvPreview, setCsvPreview] = useState<null | { name: string; bytes: number; rows: number; headers: string[]; sha256: string | null }>(null);
+  const [csvError, setCsvError] = useState("");
   const [busyApi, setBusyApi] = useState<string | null>(null);
   const [notice, setNotice] = useState("Workbench metadata is stored in this browser only. No credentials are stored here.");
 
@@ -104,6 +106,47 @@ export default function EngineeringConsole() {
     setDatasetName(""); setDatasetSource(""); setDatasetDescription(""); setNotice("Dataset entry created in the local catalog. No file has been uploaded or validated.");
   }
 
+  async function inspectCsv(file?: File) {
+    setCsvError("");
+    setCsvPreview(null);
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) { setCsvError("Choose a .csv file."); return; }
+    if (file.size > 20 * 1024 * 1024) { setCsvError("CSV inspection is limited to 20 MB in this V1 browser tool."); return; }
+    try {
+      const raw = await file.text();
+      const rows = parseCsvRows(raw);
+      if (rows.length < 2) throw new Error("The CSV needs a header row and at least one data row.");
+      const headers = rows[0].map(value => value.trim());
+      if (headers.some(value => !value)) throw new Error("Every column must have a non-empty header.");
+      if (new Set(headers).size !== headers.length) throw new Error("Duplicate column headers detected. Rename them before cataloguing.");
+      const widthIssues = rows.slice(1).filter(row => row.some(value => value.trim()) && row.length !== headers.length).length;
+      if (widthIssues) throw new Error(`${widthIssues} data row(s) have a different number of columns than the header.`);
+      let sha256: string | null = null;
+      if (globalThis.crypto?.subtle) {
+        const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+        sha256 = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+      }
+      setCsvPreview({ name: file.name, bytes: file.size, rows: rows.length - 1, headers, sha256 });
+      setNotice("CSV inspected in this browser only. The file was not uploaded or stored.");
+    } catch (error) {
+      setCsvError(error instanceof Error ? error.message : "Unable to inspect this CSV.");
+    }
+  }
+
+  function registerInspectedCsv() {
+    if (!csvPreview) return;
+    const fingerprint = csvPreview.sha256 ? `SHA-256 ${csvPreview.sha256}` : "SHA-256 unavailable in this browser";
+    setStore(s => ({ ...s, datasets: [...s.datasets, {
+      id: uid(),
+      name: csvPreview.name,
+      source: "Local browser CSV inspection",
+      classification: "user-supplied-file",
+      description: `${csvPreview.rows} rows · ${csvPreview.headers.length} columns · ${fingerprint}`
+    }] }));
+    setNotice("CSV metadata added to the local catalog. Raw file contents were not uploaded or retained.");
+    setCsvPreview(null);
+  }
+
   function addExperiment(e: FormEvent) {
     e.preventDefault();
     if (!experimentName.trim()) return;
@@ -130,7 +173,7 @@ export default function EngineeringConsole() {
           <Panel title="Recent workspace activity" subtitle="Local browser registry summary"><div className="workbench-empty"><Layers3 size={25}/><b>{totalItems ? `${totalItems} local records registered` : "Workbench ready for configuration"}</b><span>{totalItems ? "Use the sections on the left to inspect and update your local registries." : "Start by registering the NOVA Core API, then add verified data sources and datasets."}</span><button className="nova-button primary" onClick={() => setTab("apis")}>Configure API registry</button></div></Panel>
         </div>}
         {tab === "apis" && <div className="workbench-stack"><Panel title="Register API endpoint" subtitle="Store a non-secret base URL and test its /health endpoint"><form className="workbench-form" onSubmit={addApi}><div><label className="nova-field-label">Display name</label><input className="nova-input" value={apiName} onChange={e=>setApiName(e.target.value)} placeholder="NOVA Core API" required/></div><div><label className="nova-field-label">Base URL</label><input className="nova-input" type="url" value={apiUrl} onChange={e=>setApiUrl(e.target.value)} placeholder="https://api.example.org" required/></div><div><label className="nova-field-label">Owning module</label><select className="nova-input" value={apiOwner} onChange={e=>setApiOwner(e.target.value)}><option>NOVA Core</option><option>NeoAgro</option><option>NeoCell</option><option>NeoGrid</option><option>External provider</option></select></div><button className="nova-button primary" type="submit"><Plus size={14}/> Register endpoint</button></form></Panel><Panel title="API registry" subtitle="Endpoint reachability is not a full integration test">{store.apis.length ? store.apis.map(api=><div className="workbench-record" key={api.id}><div className="record-icon"><Server size={17}/></div><div className="record-main"><b>{api.name}</b><small>{api.baseUrl} · {api.owner}</small><small>{api.detail}</small></div><Status kind={api.status==="online"?"good":api.status==="offline"?"warn":"muted"}>{api.status}</Status><button className="nova-button" disabled={busyApi===api.id} onClick={()=>testApi(api)}><RefreshCw size={13}/>{busyApi===api.id?"Testing":"Test /health"}</button></div>) : <Empty>No API endpoints registered yet.</Empty>}</Panel></div>}
-        {tab === "data" && <div className="workbench-stack"><Panel title="Register data source" subtitle="Record where data comes from and how it should be classified"><form className="workbench-form" onSubmit={addSource}><div><label className="nova-field-label">Source name</label><input className="nova-input" value={sourceName} onChange={e=>setSourceName(e.target.value)} placeholder="NASA POWER Daily" required/></div><div><label className="nova-field-label">Provider / origin</label><input className="nova-input" value={sourceProvider} onChange={e=>setSourceProvider(e.target.value)} placeholder="NASA POWER" required/></div><div><label className="nova-field-label">Classification</label><select className="nova-input" value={sourceClass} onChange={e=>setSourceClass(e.target.value)}><option value="provider-derived">Provider-derived / gridded</option><option value="direct-observation">Direct field observation</option><option value="synthetic-demo">Synthetic / demo</option><option value="derived-calculation">Derived calculation</option></select></div><button className="nova-button primary" type="submit"><Plus size={14}/> Add source</button></form></Panel><Panel title="Register dataset metadata" subtitle="Catalog only: no file upload or ingestion is performed"><form className="workbench-form" onSubmit={addDataset}><div><label className="nova-field-label">Dataset name</label><input className="nova-input" value={datasetName} onChange={e=>setDatasetName(e.target.value)} placeholder="Site weather daily v1" required/></div><div><label className="nova-field-label">Source / URI reference</label><input className="nova-input" value={datasetSource} onChange={e=>setDatasetSource(e.target.value)} placeholder="NASA POWER · point · lat/lon" required/></div><div><label className="nova-field-label">Classification</label><select className="nova-input" value={datasetClass} onChange={e=>setDatasetClass(e.target.value)}><option value="provider-derived">Provider-derived</option><option value="direct-observation">Direct observation</option><option value="synthetic-demo">Synthetic / demo</option><option value="derived-calculation">Derived calculation</option></select></div><div><label className="nova-field-label">Description / units / period</label><input className="nova-input" value={datasetDescription} onChange={e=>setDatasetDescription(e.target.value)} placeholder="Daily T2M °C · YYYY-MM-DD to YYYY-MM-DD"/></div><button className="nova-button primary" type="submit"><Plus size={14}/> Add dataset record</button></form></Panel><Panel title="Data catalog" subtitle="Browser-local metadata · not a durable shared database">{store.sources.map(source=><div className="workbench-record" key={source.id}><div className="record-icon"><Cloud size={17}/></div><div className="record-main"><b>{source.name}</b><small>{source.provider} · {source.classification}</small></div><Status kind="muted">{source.refresh}</Status></div>)}{store.datasets.map(dataset=><div className="workbench-record" key={dataset.id}><div className="record-icon"><Database size={17}/></div><div className="record-main"><b>{dataset.name}</b><small>{dataset.source} · {dataset.classification}</small><small>{dataset.description}</small></div><Status kind="warn">Metadata only</Status></div>)}{!store.sources.length&&!store.datasets.length&&<Empty>No sources or datasets registered.</Empty>}</Panel></div>}
+        {tab === "data" && <div className="workbench-stack"><Panel title="Register data source" subtitle="Record where data comes from and how it should be classified"><form className="workbench-form" onSubmit={addSource}><div><label className="nova-field-label">Source name</label><input className="nova-input" value={sourceName} onChange={e=>setSourceName(e.target.value)} placeholder="NASA POWER Daily" required/></div><div><label className="nova-field-label">Provider / origin</label><input className="nova-input" value={sourceProvider} onChange={e=>setSourceProvider(e.target.value)} placeholder="NASA POWER" required/></div><div><label className="nova-field-label">Classification</label><select className="nova-input" value={sourceClass} onChange={e=>setSourceClass(e.target.value)}><option value="provider-derived">Provider-derived / gridded</option><option value="direct-observation">Direct field observation</option><option value="synthetic-demo">Synthetic / demo</option><option value="derived-calculation">Derived calculation</option></select></div><button className="nova-button primary" type="submit"><Plus size={14}/> Add source</button></form></Panel><Panel title="Register dataset metadata" subtitle="Catalog only: no file upload or ingestion is performed"><form className="workbench-form" onSubmit={addDataset}><div><label className="nova-field-label">Dataset name</label><input className="nova-input" value={datasetName} onChange={e=>setDatasetName(e.target.value)} placeholder="Site weather daily v1" required/></div><div><label className="nova-field-label">Source / URI reference</label><input className="nova-input" value={datasetSource} onChange={e=>setDatasetSource(e.target.value)} placeholder="NASA POWER · point · lat/lon" required/></div><div><label className="nova-field-label">Classification</label><select className="nova-input" value={datasetClass} onChange={e=>setDatasetClass(e.target.value)}><option value="provider-derived">Provider-derived</option><option value="direct-observation">Direct observation</option><option value="synthetic-demo">Synthetic / demo</option><option value="derived-calculation">Derived calculation</option></select></div><div><label className="nova-field-label">Description / units / period</label><input className="nova-input" value={datasetDescription} onChange={e=>setDatasetDescription(e.target.value)} placeholder="Daily T2M °C · YYYY-MM-DD to YYYY-MM-DD"/></div><button className="nova-button primary" type="submit"><Plus size={14}/> Add dataset record</button></form></Panel><Panel title="Local CSV inspector" subtitle="Inspect a dataset in this browser before registering its metadata"><div className="workbench-csv-upload"><label className="nova-field-label">Choose CSV file · maximum 20 MB</label><input className="nova-input" type="file" accept=".csv,text/csv" onChange={e=>inspectCsv(e.target.files?.[0])}/><small className="field-hint">The file is read locally in your browser. It is not uploaded, saved to the server or retained in the catalog.</small></div>{csvError && <div className="nova-error">{csvError}</div>}{csvPreview && <div className="csv-preview"><div className="provenance-list"><div><span>File</span><b>{csvPreview.name}</b></div><div><span>Rows</span><b>{csvPreview.rows.toLocaleString()}</b></div><div><span>Columns</span><b>{csvPreview.headers.length}</b></div><div><span>Size</span><b>{(csvPreview.bytes/1024).toFixed(1)} KB</b></div><div><span>Fingerprint</span><b>{csvPreview.sha256 ? csvPreview.sha256.slice(0,20)+"…" : "Unavailable"}</b></div></div><div className="csv-headers">{csvPreview.headers.map(header=><span key={header}>{header}</span>)}</div><button className="nova-button primary" onClick={registerInspectedCsv}>Register dataset metadata</button></div>}</Panel><Panel title="Data catalog" subtitle="Browser-local metadata · not a durable shared database">{store.sources.map(source=><div className="workbench-record" key={source.id}><div className="record-icon"><Cloud size={17}/></div><div className="record-main"><b>{source.name}</b><small>{source.provider} · {source.classification}</small></div><Status kind="muted">{source.refresh}</Status></div>)}{store.datasets.map(dataset=><div className="workbench-record" key={dataset.id}><div className="record-icon"><Database size={17}/></div><div className="record-main"><b>{dataset.name}</b><small>{dataset.source} · {dataset.classification}</small><small>{dataset.description}</small></div><Status kind="warn">Metadata only</Status></div>)}{!store.sources.length&&!store.datasets.length&&<Empty>No sources or datasets registered.</Empty>}</Panel></div>}
         {tab === "models" && <div className="workbench-stack"><Panel title="Create model experiment specification" subtitle="Record an experiment plan without claiming training has run"><form className="workbench-form" onSubmit={addExperiment}><div><label className="nova-field-label">Experiment name</label><input className="nova-input" value={experimentName} onChange={e=>setExperimentName(e.target.value)} placeholder="NeoAgro irrigation baseline v0" required/></div><div><label className="nova-field-label">Module</label><select className="nova-input" value={experimentModule} onChange={e=>setExperimentModule(e.target.value)}><option>NOVA Core</option><option>NeoAgro</option><option>NeoCell</option><option>NeoGrid</option></select></div><div><label className="nova-field-label">Method / model family</label><input className="nova-input" value={experimentMethod} onChange={e=>setExperimentMethod(e.target.value)} placeholder="FAO-56 ET₀ / deterministic baseline"/></div><div><label className="nova-field-label">Dataset</label><select className="nova-input" value={experimentDataset} onChange={e=>setExperimentDataset(e.target.value)}><option value="">Not selected</option>{store.datasets.map(d=><option key={d.id} value={d.name}>{d.name}</option>)}</select></div><button className="nova-button primary" type="submit"><Plus size={14}/> Save experiment specification</button></form></Panel><Panel title="Experiment registry" subtitle="No training execution until a secure runner and validation pipeline exist">{store.experiments.length ? store.experiments.map(ex=><div className="workbench-record" key={ex.id}><div className="record-icon"><FlaskConical size={17}/></div><div className="record-main"><b>{ex.name}</b><small>{ex.module} · {ex.method} · Dataset: {ex.dataset}</small><small>Created {ex.createdAt}</small></div><Status kind="warn">{ex.status}</Status></div>) : <Empty>No experiment specifications yet.</Empty>}</Panel><Panel title="Training gate" subtitle="Required before any real training run"><div className="workbench-flow">{["Versioned dataset with provenance and schema","Train / validation / test split and leakage checks","Baseline metric and acceptance threshold","Reproducible environment and pinned dependencies","Model card, limitations and human review"].map((item,i)=><div className="checklist-row" key={item}><CircleHelp size={15}/>{item}<Status kind="muted">Required</Status></div>)}</div><div className="scenario-note"><AlertTriangle size={16}/> Training runner is not connected. The console will not label an experiment as trained until a real job returns logs, artifacts and evaluation metrics.</div></Panel></div>}
         {tab === "deployments" && <div className="workbench-stack"><Panel title="Connected product deployments" subtitle="Last known Vercel deployment records; open the inspector for current status">{DEPLOYMENTS.map(dep=><div className="workbench-record" key={dep.name}><div className="record-icon"><Rocket size={17}/></div><div className="record-main"><b>{dep.name}</b><small>{dep.kind} · {dep.repo} · commit {dep.sha}</small><small>{dep.url.replace("https://","")}</small></div><Status kind="good">{dep.status}</Status><a className="nova-button" href={dep.url} target="_blank" rel="noreferrer">Open product <ExternalLink size={13}/></a></div>)}</Panel><Panel title="Release policy" subtitle="Deployment control remains gated"><div className="provenance-list"><div><span>Build verification</span><b>GitHub Actions / CI</b></div><div><span>Preview review</span><b>Required</b></div><div><span>Production promotion</span><b>Explicit approval</b></div><div><span>Rollback plan</span><b>Required before release</b></div><div><span>Billing guardrail</span><b>Free-tier / cost review first</b></div></div></Panel></div>}
         <div className="workbench-toast" role="status"><CheckCircle2 size={14}/>{notice}</div>
@@ -138,6 +181,31 @@ export default function EngineeringConsole() {
       </div>
     </main>
   </div>;
+}
+
+function parseCsvRows(input: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (quoted) {
+      if (char === '"' && input[i + 1] === '"') { field += '"'; i += 1; }
+      else if (char === '"') quoted = false;
+      else field += char;
+    } else if (char === '"' && field.length === 0) quoted = true;
+    else if (char === ",") { row.push(field); field = ""; }
+    else if (char === "\n" || char === "\r") {
+      row.push(field);
+      if (row.some(value => value.trim())) rows.push(row);
+      row = []; field = "";
+      if (char === "\r" && input[i + 1] === "\n") i += 1;
+    } else field += char;
+  }
+  if (quoted) throw new Error("The CSV contains an unclosed quoted field.");
+  if (field.length || row.length) { row.push(field); if (row.some(value => value.trim())) rows.push(row); }
+  return rows;
 }
 
 function Metric({ label, value, note, icon: Icon, tone = "blue" }: { label: string; value: string; note: string; icon: typeof Activity; tone?: string }) {
