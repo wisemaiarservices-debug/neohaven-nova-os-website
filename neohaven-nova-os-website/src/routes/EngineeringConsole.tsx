@@ -13,7 +13,7 @@ type ExperimentRecord = { id: string; name: string; module: string; method: stri
 
 const STORAGE_KEY = "neohaven.nova.workbench.v1";
 const DEPLOYMENTS = [
-  { name: "NOVA OS", url: "https://nova-3p1ap1t2d-neo-haven-urban-labs.vercel.app/os", status: "READY", kind: "Preview", repo: "neohaven-nova-os-website", sha: "2d2d742", actionLabel: "Open NOVA OS" },
+  { name: "NOVA OS", url: "/os", status: "READY", kind: "Same-origin preview", repo: "neohaven-nova-os-website", sha: "b24fa6f", actionLabel: "Open NOVA OS" },
   { name: "NOVA Core API", url: "https://github.com/wisemaiarservices-debug/nova-core/pull/5", status: "SCAFFOLD ONLY", kind: "Not deployed", repo: "nova-core", sha: "PR #5", actionLabel: "Review API PR" },
   { name: "NeoAgro", url: "https://neoagro-six.vercel.app", status: "READY", kind: "Production", repo: "neoagro-platform", sha: "d86a367", actionLabel: "Open NeoAgro" },
   { name: "NeoCell", url: "https://neocell-ebon.vercel.app", status: "READY", kind: "Production", repo: "neocell-platform", sha: "92803df", actionLabel: "Open NeoCell" },
