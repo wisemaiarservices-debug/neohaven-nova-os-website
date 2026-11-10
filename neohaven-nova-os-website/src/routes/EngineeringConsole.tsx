@@ -12,9 +12,24 @@ type DatasetRecord = { id: string; name: string; source: string; classification:
 type ExperimentRecord = { id: string; name: string; module: string; method: string; dataset: string; status: "specification only"; createdAt: string };
 
 const STORAGE_KEY = "neohaven.nova.workbench.v1";
+const DEFAULT_API: ApiRecord = {
+  id: "nova-core-api-live",
+  name: "NOVA Core API",
+  baseUrl: "https://nova-core-api.neohaven.workers.dev",
+  owner: "NOVA Core",
+  status: "untested",
+  detail: "Deployed Cloudflare Worker · health check pending in this browser"
+};
+const DEFAULT_SOURCE: SourceRecord = {
+  id: "nasa-power-daily-live",
+  name: "NASA POWER Daily API",
+  provider: "NASA POWER via NOVA Core proxy",
+  classification: "provider-derived / gridded",
+  refresh: "On demand · no site coordinates stored"
+};
 const DEPLOYMENTS = [
-  { name: "NOVA OS", url: "https://neohaven-nova-os-website-git-feat-n-4294c9-neo-haven-urban-labs.vercel.app/os", status: "LAST PREVIEW", kind: "Earlier successful preview · latest source not deployed", repo: "neohaven-nova-os-website", sha: "8e09817", actionLabel: "Open last preview" },
-  { name: "NOVA Core API", url: "https://github.com/wisemaiarservices-debug/nova-core/pull/5", status: "SCAFFOLD ONLY", kind: "Manual deploy after merge · secrets required", repo: "nova-core", sha: "PR #5", actionLabel: "Review API PR" },
+  { name: "NOVA OS", url: "https://neohaven-nova-os-website-git-feat-n-4294c9-neo-haven-urban-labs.vercel.app/os", status: "PREVIEW", kind: "Earlier successful preview · confirm latest deployment before use", repo: "neohaven-nova-os-website", sha: "f24a547", actionLabel: "Open last preview" },
+  { name: "NOVA Core API", url: "https://nova-core-api.neohaven.workers.dev/health", status: "DEPLOYED", kind: "Cloudflare Worker · live health endpoint", repo: "nova-core", sha: "821d0684", actionLabel: "Open API health" },
   { name: "NeoAgro", url: "https://neoagro-six.vercel.app", status: "READY", kind: "Production", repo: "neoagro-platform", sha: "d86a367", actionLabel: "Open NeoAgro" },
   { name: "NeoCell", url: "https://neocell-ebon.vercel.app", status: "READY", kind: "Production", repo: "neocell-platform", sha: "92803df", actionLabel: "Open NeoCell" },
   { name: "NeoGrid", url: "https://neogrid-sigma.vercel.app", status: "READY", kind: "Production", repo: "neogrid-platform", sha: "e829e71", actionLabel: "Open NeoGrid" },
@@ -29,11 +44,20 @@ const NAV: { id: Tab; label: string; icon: typeof Activity }[] = [
 ];
 
 function readStore() {
+  const defaults = { apis: [DEFAULT_API], sources: [DEFAULT_SOURCE], datasets: [], experiments: [] };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      return {
+        apis: Array.isArray(saved.apis) ? (saved.apis.some((item: ApiRecord) => item.id === DEFAULT_API.id || item.owner === "NOVA Core") ? saved.apis : [...defaults.apis, ...saved.apis]) : defaults.apis,
+        sources: Array.isArray(saved.sources) ? (saved.sources.some((item: SourceRecord) => item.id === DEFAULT_SOURCE.id) ? saved.sources : [...defaults.sources, ...saved.sources]) : defaults.sources,
+        datasets: Array.isArray(saved.datasets) ? saved.datasets : [],
+        experiments: Array.isArray(saved.experiments) ? saved.experiments : [],
+      };
+    }
   } catch { /* Ignore unavailable or invalid local browser storage. */ }
-  return { apis: [], sources: [], datasets: [], experiments: [] };
+  return defaults;
 }
 
 function uid() { return globalThis.crypto?.randomUUID?.() || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
