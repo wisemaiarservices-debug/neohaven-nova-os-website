@@ -1104,7 +1104,7 @@ function Footer() {
 
 
 export default function App() {
-  const path = window.location.pathname.replace(/\\/+$/, "") || "/";
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
   if (path === "/os") return <Dashboard />;
   if (path === "/console") return <EngineeringConsole />;
   return <MarketingSite />;
