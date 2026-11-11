@@ -199,7 +199,7 @@ function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMes
       <Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="No verified battery data" icon={BatteryCharging} tone="purple"/>
     </div>
     <div className="nova-grid-two">
-      <Panel title="Site signals" subtitle="Illustrative trend · normalized sample series" action={<span className="nova-select-label">LAST 12 POINTS</span>}>
+      <Panel title="Site signals" subtitle="Verified site observations · chronological series" action={<span className="nova-select-label">LIVE DATA WINDOW</span>}>
         <div className="nova-empty"><Activity size={24}/><b>No verified site time series</b><span>Connect an approved site and ingest timestamped, unit-normalized observations to unlock trend analysis. No synthetic chart is substituted.</span></div>
         <div className="nova-chart-foot"><span>Evidence-gated visualization</span><span>Awaiting observations</span></div>
       </Panel>
@@ -208,7 +208,7 @@ function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMes
         <div className="resource-row"><div className="resource-icon amber"><Sun size={17}/></div><div className="resource-info"><b>Solar output</b><small>Awaiting verified inverter telemetry</small></div><strong>— <small>kW</small></strong></div>
         <div className="resource-row"><div className="resource-icon purple"><BatteryCharging size={17}/></div><div className="resource-info"><b>Battery charge</b><small>State of charge</small></div><strong>— <small>%</small></strong></div>
         <div className="resource-row"><div className="resource-icon blue"><Network size={17}/></div><div className="resource-info"><b>Gateway health</b><small>No registered gateway telemetry</small></div><strong>— <small>%</small></strong></div>
-        <div className="nova-progress"><span style={{width:"67%"}}/></div><div className="nova-chart-foot"><span>No battery observation</span><span>67%</span></div>
+        <div className="nova-empty compact"><span>Battery trend withheld until verified BMS observations are available.</span></div>
       </Panel>
     </div>
     <Panel title="Registered module connections" subtitle="API registry shared with the Engineering Console · health checks only">
@@ -244,7 +244,7 @@ function NeoAgro({ values: v, latitude, longitude, setLatitude, setLongitude, da
   return <>
     <div className="nova-metrics-grid">
       <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="Illustrative input · no sensor feed" icon={Droplets} tone="teal"/>
-      <Metric label="Air temperature" value={v.temperature.toFixed(1)} unit="°C" note="Illustrative input" icon={ThermometerSun}/>
+      <Metric label="Air temperature" value={String(v.temperature)} unit="°C" note="Illustrative input" icon={ThermometerSun}/>
       <Metric label="Relative humidity" value={String(v.humidity)} unit="%" note="Illustrative input" icon={Waves} tone="blue"/>
       <Metric label="Rainfall" value={String(v.rainfall)} unit="mm" note="Illustrative input" icon={Cloud} tone="purple"/>
     </div>
@@ -285,8 +285,8 @@ function CloudRainIcon(props: any) { return <Cloud {...props}/>; }
 
 function NeoGrid({ values: v }: any) {
   return <>
-    <div className="nova-metrics-grid"><Metric label="Solar generation" value={v.solar.toFixed(1)} unit="kW" note="Illustrative instantaneous value" icon={Sun} tone="amber"/><Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="Illustrative storage input" icon={BatteryCharging} tone="purple"/><Metric label="Grid import/export" value="—" note="No meter feed connected" icon={Zap}/><Metric label="Carbon intensity" value="—" note="No verified grid factor or meter data" icon={Factory} tone="teal"/></div>
-    <div className="nova-grid-two"><Panel title="Energy system overview" subtitle="Conceptual flow · not live telemetry"><div className="energy-flow"><div className="energy-node"><Sun/><b>PV array</b><strong>—</strong><small>Sample input</small></div><div className="energy-arrow">→</div><div className="energy-node"><Zap/><b>Power bus</b><strong>—</strong><small>Not connected</small></div><div className="energy-arrow">→</div><div className="energy-node"><BatteryCharging/><b>Battery</b><strong>—</strong><small>Sample input</small></div></div><div className="nova-chart-foot">Flow diagram is illustrative. No power balance or dispatch optimization is being claimed.</div></Panel><Panel title="Grid readiness" subtitle="Data required for validated energy analytics"><div className="checklist-row"><CheckCircle2/> PV inverter telemetry <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Battery BMS feed <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Revenue-grade meter <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Tariff and grid factor <Status kind="warn">Missing</Status></div></Panel></div>
+    <div className="nova-metrics-grid"><Metric label="Solar generation" value={String(v.solar)} unit="kW" note="Illustrative instantaneous value" icon={Sun} tone="amber"/><Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="Illustrative storage input" icon={BatteryCharging} tone="purple"/><Metric label="Grid import/export" value="—" note="No meter feed connected" icon={Zap}/><Metric label="Carbon intensity" value="—" note="No verified grid factor or meter data" icon={Factory} tone="teal"/></div>
+    <div className="nova-grid-two"><Panel title="Energy system overview" subtitle="Conceptual flow · not live telemetry"><div className="energy-flow"><div className="energy-node"><Sun/><b>PV array</b><strong>—</strong><small>No verified telemetry</small></div><div className="energy-arrow">→</div><div className="energy-node"><Zap/><b>Power bus</b><strong>—</strong><small>Not connected</small></div><div className="energy-arrow">→</div><div className="energy-node"><BatteryCharging/><b>Battery</b><strong>—</strong><small>No verified telemetry</small></div></div><div className="nova-chart-foot">Flow diagram is illustrative. No power balance or dispatch optimization is being claimed.</div></Panel><Panel title="Grid readiness" subtitle="Data required for validated energy analytics"><div className="checklist-row"><CheckCircle2/> PV inverter telemetry <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Battery BMS feed <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Revenue-grade meter <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Tariff and grid factor <Status kind="warn">Missing</Status></div></Panel></div>
   </>;
 }
 
