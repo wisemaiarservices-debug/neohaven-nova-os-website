@@ -26,8 +26,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: neohaven-nova-os-website/pnpm-lock.yaml
       - name: Activate project pnpm version
         run: |
           corepack enable
