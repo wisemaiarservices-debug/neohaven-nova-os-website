@@ -78,7 +78,7 @@ export default function EngineeringConsole() {
   }, []);
 
   useEffect(() => {
-    if (apis.length) localStorage.setItem(REGISTRY_KEY, JSON.stringify({ apis }));
+    localStorage.setItem(REGISTRY_KEY, JSON.stringify({ apis }));
   }, [apis]);
 
   const core = useMemo(
