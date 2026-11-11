@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import Dashboard from "./Dashboard";
+import EngineeringConsole from "./EngineeringConsole";
 import {
   ArrowRight,
   Play,
@@ -47,7 +49,7 @@ const NAV = [
   { label: "Contact", href: "#contact" },
 ];
 
-export default function App() {
+function MarketingSite() {
   return (
     <div id="home" className="min-h-screen bg-background text-foreground">
       <Header />
@@ -1098,4 +1100,12 @@ function Footer() {
       </div>
     </footer>
   );
+}
+
+
+export default function App() {
+  const path = window.location.pathname.replace(/\\/+$/, "") || "/";
+  if (path === "/os") return <Dashboard />;
+  if (path === "/console") return <EngineeringConsole />;
+  return <MarketingSite />;
 }
