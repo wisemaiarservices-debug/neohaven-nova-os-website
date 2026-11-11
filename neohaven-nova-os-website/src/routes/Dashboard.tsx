@@ -30,8 +30,8 @@ const NAV: { key: ModuleKey; label: string; icon: typeof LayoutDashboard }[] = [
 ];
 
 const DEMO = {
-  temperature: 29.4, soilMoisture: 34, solar: 42.6, battery: 67, water: 18.4,
-  gateway: 91, humidity: 48, rainfall: 0.8, wind: 3.2,
+  temperature: "—", soilMoisture: "—", solar: "—", battery: "—", water: "—",
+  gateway: "—", humidity: "—", rainfall: "—", wind: "—",
 };
 
 function Metric({ label, value, unit, note, icon: Icon, tone = "blue" }: {
@@ -77,7 +77,7 @@ export default function Dashboard() {
   const isLive = apiState === "online";
   // The overview charts and seeded metrics remain demo fixtures even after a separate provider request succeeds.
   // NASA POWER provenance is shown only beside the actual provider response in the NeoAgro inspector.
-  const dataLabel = "Illustrative demo values · not field telemetry";
+  const dataLabel = "No verified site observations connected";
 
   useEffect(() => {
     const defaultCore: RegisteredApi = { id: "nova-core", name: "NOVA Core API", baseUrl: DEFAULT_NOVA_API_URL, owner: "NOVA Core" };
@@ -126,7 +126,7 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [apiUrl]);
 
-  const chartValues = useMemo(() => [28, 31, 29, 35, 33, 39, 36, 42, 40, 46, 44, 49], []);
+  const chartValues = useMemo(() => [], []);
   async function checkApi() {
     if (!apiUrl.trim()) { setApiState("unconfigured"); setApiMessage("Enter your deployed API base URL first."); return; }
     setApiState("checking");
@@ -193,23 +193,22 @@ function pageDescription(key: ModuleKey) {
 function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMessage, apiState, onCheck, apiRegistry, moduleApiStatus }: any) {
   return <>
     <div className="nova-metrics-grid">
-      <Metric label="Ambient temperature" value={v.temperature.toFixed(1)} unit="°C" note="Illustrative site input" icon={ThermometerSun}/>
-      <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="Below provisional 35% flag" icon={Droplets} tone="teal"/>
-      <Metric label="Solar generation" value={v.solar.toFixed(1)} unit="kW" note="Sample instantaneous value" icon={Sun} tone="amber"/>
-      <Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="Sample storage value" icon={BatteryCharging} tone="purple"/>
+      <Metric label="Ambient temperature" value={String(v.temperature)} unit="°C" note="No verified site data" icon={ThermometerSun}/>
+      <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="No crop or sensor data available" icon={Droplets} tone="teal"/>
+      <Metric label="Solar generation" value={String(v.solar)} unit="kW" note="No verified meter data" icon={Sun} tone="amber"/>
+      <Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="No verified battery data" icon={BatteryCharging} tone="purple"/>
     </div>
     <div className="nova-grid-two">
       <Panel title="Site signals" subtitle="Illustrative trend · normalized sample series" action={<span className="nova-select-label">LAST 12 POINTS</span>}>
-        <div className="nova-chart-legend"><span><i className="legend-teal"/>Solar generation</span><span><i className="legend-blue"/>Soil moisture</span></div>
-        <div className="nova-chart"><div className="chart-y-labels"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><div className="chart-area"><div className="chart-gridlines"><i/><i/><i/><i/><i/></div><svg viewBox="0 0 600 180" preserveAspectRatio="none"><polyline points="0,120 55,108 110,116 165,85 220,95 275,72 330,82 385,48 440,59 495,36 550,43 600,25" fill="none" stroke="#66d7c1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><polyline points="0,90 55,95 110,88 165,100 220,91 275,105 330,97 385,112 440,105 495,118 550,110 600,116" fill="none" stroke="#7ca8ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg><div className="chart-x-labels"><span>01</span><span>03</span><span>05</span><span>07</span><span>09</span><span>11</span><span>12</span></div></div></div>
-        <div className="nova-chart-foot"><span>{dataLabel}</span><span>Not a measured time series</span></div>
+        <div className="nova-empty"><Activity size={24}/><b>No verified site time series</b><span>Connect an approved site and ingest timestamped, unit-normalized observations to unlock trend analysis. No synthetic chart is substituted.</span></div>
+        <div className="nova-chart-foot"><span>Evidence-gated visualization</span><span>Awaiting observations</span></div>
       </Panel>
       <Panel title="Resource balance" subtitle="Current illustrative operating snapshot">
-        <div className="resource-row"><div className="resource-icon teal"><Droplets size={17}/></div><div className="resource-info"><b>Water use</b><small>Daily site input</small></div><strong>18.4 <small>m³/day</small></strong></div>
-        <div className="resource-row"><div className="resource-icon amber"><Sun size={17}/></div><div className="resource-info"><b>Solar output</b><small>Instantaneous sample</small></div><strong>42.6 <small>kW</small></strong></div>
-        <div className="resource-row"><div className="resource-icon purple"><BatteryCharging size={17}/></div><div className="resource-info"><b>Battery charge</b><small>State of charge</small></div><strong>67 <small>%</small></strong></div>
-        <div className="resource-row"><div className="resource-icon blue"><Network size={17}/></div><div className="resource-info"><b>Gateway health</b><small>Sample device status</small></div><strong>91 <small>%</small></strong></div>
-        <div className="nova-progress"><span style={{width:"67%"}}/></div><div className="nova-chart-foot"><span>Battery SOC illustration</span><span>67%</span></div>
+        <div className="resource-row"><div className="resource-icon teal"><Droplets size={17}/></div><div className="resource-info"><b>Water use</b><small>Awaiting verified water meter</small></div><strong>— <small>m³/day</small></strong></div>
+        <div className="resource-row"><div className="resource-icon amber"><Sun size={17}/></div><div className="resource-info"><b>Solar output</b><small>Awaiting verified inverter telemetry</small></div><strong>— <small>kW</small></strong></div>
+        <div className="resource-row"><div className="resource-icon purple"><BatteryCharging size={17}/></div><div className="resource-info"><b>Battery charge</b><small>State of charge</small></div><strong>— <small>%</small></strong></div>
+        <div className="resource-row"><div className="resource-icon blue"><Network size={17}/></div><div className="resource-info"><b>Gateway health</b><small>No registered gateway telemetry</small></div><strong>— <small>%</small></strong></div>
+        <div className="nova-progress"><span style={{width:"67%"}}/></div><div className="nova-chart-foot"><span>No battery observation</span><span>67%</span></div>
       </Panel>
     </div>
     <Panel title="Registered module connections" subtitle="API registry shared with the Engineering Console · health checks only">
@@ -218,8 +217,8 @@ function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMes
     </Panel>
     <div className="nova-grid-two lower-grid">
       <Panel title="Operational flags" subtitle="Rule-based screening · not validated diagnosis">
-        <div className="flag-row"><span className="flag-icon warn"><AlertTriangle size={16}/></span><div><b>Soil moisture screening flag</b><small>34% is below the provisional 35% rule threshold. Crop, soil and sensor calibration context required.</small></div><Status kind="warn">Review</Status></div>
-        <div className="flag-row"><span className="flag-icon good"><CheckCircle2 size={16}/></span><div><b>Battery input within bounds</b><small>67% is within the accepted 0–100% input range.</small></div><Status>Valid input</Status></div>
+        <div className="flag-row"><span className="flag-icon warn"><AlertTriangle size={16}/></span><div><b>Soil moisture assessment unavailable</b><small>No verified soil sensor observation, crop profile or calibration record is connected.</small></div><Status kind="muted">Not assessed</Status></div>
+        <div className="flag-row"><span className="flag-icon good"><CheckCircle2 size={16}/></span><div><b>Battery status not assessed</b><small>No verified BMS measurement is available for validation.</small></div><Status kind="muted">No data</Status></div>
         <div className="flag-row"><span className="flag-icon muted"><CircleHelp size={16}/></span><div><b>Impact accounting unavailable</b><small>No verified baseline/intervention data for savings, yield or carbon claims.</small></div><Status kind="muted">Not assessed</Status></div>
       </Panel>
       <Panel title="Connect NOVA Core API" subtitle="Link this console to the deployed FastAPI service">
@@ -247,7 +246,7 @@ function NeoAgro({ values: v, latitude, longitude, setLatitude, setLongitude, da
       <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="Illustrative input · no sensor feed" icon={Droplets} tone="teal"/>
       <Metric label="Air temperature" value={v.temperature.toFixed(1)} unit="°C" note="Illustrative input" icon={ThermometerSun}/>
       <Metric label="Relative humidity" value={String(v.humidity)} unit="%" note="Illustrative input" icon={Waves} tone="blue"/>
-      <Metric label="Rainfall" value={v.rainfall.toFixed(1)} unit="mm" note="Illustrative input" icon={Cloud} tone="purple"/>
+      <Metric label="Rainfall" value={String(v.rainfall)} unit="mm" note="Illustrative input" icon={Cloud} tone="purple"/>
     </div>
     <div className="nova-grid-two">
       <Panel title="Climate data connector" subtitle="NASA POWER daily point data · public provider API">
@@ -287,7 +286,7 @@ function CloudRainIcon(props: any) { return <Cloud {...props}/>; }
 function NeoGrid({ values: v }: any) {
   return <>
     <div className="nova-metrics-grid"><Metric label="Solar generation" value={v.solar.toFixed(1)} unit="kW" note="Illustrative instantaneous value" icon={Sun} tone="amber"/><Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="Illustrative storage input" icon={BatteryCharging} tone="purple"/><Metric label="Grid import/export" value="—" note="No meter feed connected" icon={Zap}/><Metric label="Carbon intensity" value="—" note="No verified grid factor or meter data" icon={Factory} tone="teal"/></div>
-    <div className="nova-grid-two"><Panel title="Energy system overview" subtitle="Conceptual flow · not live telemetry"><div className="energy-flow"><div className="energy-node"><Sun/><b>PV array</b><strong>42.6 kW</strong><small>Sample input</small></div><div className="energy-arrow">→</div><div className="energy-node"><Zap/><b>Power bus</b><strong>—</strong><small>Not connected</small></div><div className="energy-arrow">→</div><div className="energy-node"><BatteryCharging/><b>Battery</b><strong>67% SOC</strong><small>Sample input</small></div></div><div className="nova-chart-foot">Flow diagram is illustrative. No power balance or dispatch optimization is being claimed.</div></Panel><Panel title="Grid readiness" subtitle="Data required for validated energy analytics"><div className="checklist-row"><CheckCircle2/> PV inverter telemetry <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Battery BMS feed <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Revenue-grade meter <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Tariff and grid factor <Status kind="warn">Missing</Status></div></Panel></div>
+    <div className="nova-grid-two"><Panel title="Energy system overview" subtitle="Conceptual flow · not live telemetry"><div className="energy-flow"><div className="energy-node"><Sun/><b>PV array</b><strong>—</strong><small>Sample input</small></div><div className="energy-arrow">→</div><div className="energy-node"><Zap/><b>Power bus</b><strong>—</strong><small>Not connected</small></div><div className="energy-arrow">→</div><div className="energy-node"><BatteryCharging/><b>Battery</b><strong>—</strong><small>Sample input</small></div></div><div className="nova-chart-foot">Flow diagram is illustrative. No power balance or dispatch optimization is being claimed.</div></Panel><Panel title="Grid readiness" subtitle="Data required for validated energy analytics"><div className="checklist-row"><CheckCircle2/> PV inverter telemetry <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Battery BMS feed <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Revenue-grade meter <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Tariff and grid factor <Status kind="warn">Missing</Status></div></Panel></div>
   </>;
 }
 
