@@ -198,3 +198,37 @@ body{margin:0;background:var(--nova-bg);color:var(--nova-text)}
 @media(max-width:1100px){.nova-shell{grid-template-columns:225px minmax(0,1fr)}.nova-metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.nova-page-heading{align-items:flex-start;flex-direction:column}.nova-heading-actions{justify-content:flex-start}}
 @media(max-width:760px){.nova-shell{display:block}.nova-sidebar{position:fixed;left:0;top:0;width:270px;max-width:85vw;transform:translateX(-105%);transition:transform .25s;box-shadow:20px 0 50px #0008}.nova-sidebar.nav-open{transform:translateX(0)}.nova-mobile-menu{display:grid}.nova-topbar{justify-content:flex-start;min-height:60px;padding:0 15px}.nova-breadcrumb{flex:1}.nova-env{display:none}.nova-top-actions{gap:7px}.nova-content{padding:24px 14px}.nova-page-heading h1{font-size:27px}.nova-heading-actions{gap:7px}.nova-button{font-size:9px}.nova-notice{align-items:flex-start}.nova-notice .notice-tag{display:none}.nova-grid-two{grid-template-columns:1fr}.nova-metrics-grid{gap:9px}.nova-metric{padding:13px;min-height:112px}.nova-metric-value{font-size:23px}.nova-footer{flex-direction:column}.nova-form-grid{grid-template-columns:1fr}.energy-flow{flex-wrap:wrap}.topology-branches{gap:5px}.topology-node{min-width:0;padding:10px 5px}.nova-panel{padding:15px}}
 @media(max-width:390px){.nova-metrics-grid{grid-template-columns:1fr 1fr}.nova-top-actions .nova-button{display:none}.nova-page-heading h1{font-size:24px}.nova-status{font-size:7px;padding:4px 6px}}
+
+
+/* NOVA Engineering Console — visual parity with the operator workspace */
+.nova-console{--console-bg:#07111d;--console-panel:#0d1b2a;--console-line:rgba(154,190,216,.15);--console-text:#e9f2f8;--console-muted:#91a8ba;min-height:100vh;color:var(--console-text)!important;background:radial-gradient(ellipse at 75% -12%,rgba(38,118,146,.22),transparent 38%),linear-gradient(145deg,#07111d,#091522 58%,#08101a)!important}
+.nova-console .bg-background{background:rgba(7,17,29,.92)!important}
+.nova-console header{border-color:var(--console-line)!important;background:rgba(7,17,29,.88)!important;box-shadow:0 10px 40px #0002}
+.nova-console header h1{color:var(--console-text)!important;letter-spacing:-.025em}
+.nova-console header .font-mono{color:#69d9d0!important}
+.nova-console section{border:1px solid var(--console-line)!important;border-radius:16px!important;background:linear-gradient(155deg,rgba(16,34,53,.96),rgba(10,24,38,.96))!important;box-shadow:0 18px 50px #0002!important}
+.nova-console section h2{color:var(--console-text)!important;letter-spacing:-.015em}
+.nova-console section .border-b{border-color:var(--console-line)!important}
+.nova-console .text-foreground{color:var(--console-text)!important}
+.nova-console .text-muted-foreground{color:var(--console-muted)!important}
+.nova-console .border-border{border-color:var(--console-line)!important}
+.nova-console .bg-muted{background:rgba(122,158,184,.12)!important;color:#c3d4df!important}
+.nova-console article{border-color:var(--console-line)!important;background:rgba(5,17,29,.34)}
+.nova-console input{border:1px solid rgba(145,180,204,.22)!important;border-radius:9px!important;background:#071522!important;color:var(--console-text)!important;outline:none}
+.nova-console input:focus{border-color:#55d6cf!important;box-shadow:0 0 0 3px #55d6cf20}
+.nova-console button{transition:background .18s ease,border-color .18s ease,transform .18s ease}
+.nova-console button:hover:not(:disabled){border-color:#55d6cf66!important}
+.nova-console button:disabled{opacity:.55;cursor:not-allowed}
+.nova-console .bg-primary{background:linear-gradient(110deg,#55d6cf,#6eabdf)!important;color:#071522!important}
+.nova-console .text-primary{color:#72dcd5!important}
+.nova-console .border-primary\/25{border-color:#55d6cf35!important}
+.nova-console .bg-primary\/5{background:rgba(85,214,207,.055)!important}
+.nova-console .bg-primary\/10{background:rgba(85,214,207,.12)!important}
+.nova-console nav[aria-label] button{border-radius:10px!important;padding:10px 14px!important}
+.nova-console nav[aria-label] button[class*="border-primary"]{border-color:#55d6cf55!important;background:linear-gradient(110deg,#12364a,#102538)!important;color:#dffdfa!important}
+.nova-console a{transition:color .18s ease}
+.nova-console a:hover{color:#8ce8e0}
+.nova-console .max-w-7xl{max-width:1440px}
+.nova-console main{padding-top:30px;padding-bottom:44px}
+.nova-console footer{border-color:var(--console-line)!important}
+@media(max-width:640px){.nova-console main{padding-left:14px;padding-right:14px}.nova-console header .max-w-7xl{padding-left:14px;padding-right:14px}.nova-console section{padding:16px}}
