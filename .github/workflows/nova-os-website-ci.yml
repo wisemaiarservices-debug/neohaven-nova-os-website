@@ -26,13 +26,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: neohaven-nova-os-website/package-lock.json
-      - run: npm ci
-      - run: npm run build
+          cache: pnpm
+          cache-dependency-path: neohaven-nova-os-website/pnpm-lock.yaml
+      - name: Activate project pnpm version
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.28.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       - name: Start Vite preview
         run: |
-          npm run preview -- --host 127.0.0.1 > /tmp/nova-os-vite-preview.log 2>&1 &
+          pnpm run preview -- --host 127.0.0.1 > /tmp/nova-os-vite-preview.log 2>&1 &
           echo $! > /tmp/nova-os-vite-preview.pid
       - name: Smoke test workspace routes and client bundles
         run: node scripts/smoke-routes.mjs
