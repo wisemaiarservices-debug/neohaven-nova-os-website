@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/os", "destination": "/index.html" },
+    { "source": "/console", "destination": "/index.html" }
+  ]
+}
