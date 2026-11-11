@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, Trash2, Wifi, XCircle
 } from "lucide-react";
 
 const DEFAULT_CORE_API = "https://nova-core-api.neohaven.workers.dev";
-const REGISTRY_KEY = "neohaven.nova.engineering.apis.v1";
+const REGISTRY_KEY = "neohaven.nova.workbench.v1";
 
 type ApiEntry = {
   id: string;
@@ -31,7 +31,7 @@ function readRegistry(): ApiEntry[] {
   try {
     const raw = localStorage.getItem(REGISTRY_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    if (Array.isArray(parsed)) return parsed.filter((item) =>
+    if (Array.isArray(parsed?.apis)) return parsed.apis.filter((item) =>
       item && typeof item.id === "string" && typeof item.baseUrl === "string"
     );
   } catch {
@@ -51,7 +51,7 @@ function normalizeBaseUrl(value: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
-function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return <section className="rounded-xl border border-border bg-surface p-5 shadow-[var(--shadow-panel)]">
     <div className="mb-4 border-b border-border pb-3">
       <h2 className="text-base font-semibold text-foreground">{title}</h2>
@@ -78,7 +78,7 @@ export default function EngineeringConsole() {
   }, []);
 
   useEffect(() => {
-    if (apis.length) localStorage.setItem(REGISTRY_KEY, JSON.stringify(apis));
+    if (apis.length) localStorage.setItem(REGISTRY_KEY, JSON.stringify({ apis }));
   }, [apis]);
 
   const core = useMemo(
@@ -110,7 +110,7 @@ export default function EngineeringConsole() {
     }
   }
 
-  function addApi(event: React.FormEvent) {
+  function addApi(event: FormEvent) {
     event.preventDefault();
     try {
       const normalized = normalizeBaseUrl(baseUrl);
