@@ -31,7 +31,7 @@ function readRegistry(): ApiEntry[] {
   try {
     const raw = localStorage.getItem(REGISTRY_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    if (Array.isArray(parsed?.apis)) return parsed.apis.filter((item) =>
+    if (Array.isArray(parsed?.apis)) return parsed.apis.filter((item: any) =>
       item && typeof item.id === "string" && typeof item.baseUrl === "string"
     );
   } catch {
