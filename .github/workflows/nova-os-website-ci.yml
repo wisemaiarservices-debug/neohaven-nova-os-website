@@ -1,0 +1,40 @@
+name: NOVA OS website CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "neohaven-nova-os-website/**"
+      - ".github/workflows/nova-os-website-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "neohaven-nova-os-website/**"
+      - ".github/workflows/nova-os-website-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-route-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: neohaven-nova-os-website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Activate project pnpm version
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.28.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Start Vite preview
+        run: |
+          pnpm run preview -- --host 127.0.0.1 > /tmp/nova-os-vite-preview.log 2>&1 &
+          echo $! > /tmp/nova-os-vite-preview.pid
+      - name: Smoke test workspace routes and client bundles
+        run: node scripts/smoke-routes.mjs

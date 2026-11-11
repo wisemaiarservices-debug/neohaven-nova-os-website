@@ -8,6 +8,7 @@ import {
 
 type ModuleKey = "overview" | "neoagro" | "neogrid" | "neocell" | "data" | "scenarios";
 type RegisteredApi = { id: string; name: string; baseUrl: string; owner: string; status?: string; detail?: string };
+const DEFAULT_NOVA_API_URL = import.meta.env.VITE_NOVA_API_URL || "https://nova-core-api.neohaven.workers.dev";
 const PRODUCT_URLS: Partial<Record<ModuleKey, string>> = {
   neoagro: "https://neoagro-six.vercel.app",
   neocell: "https://neocell-ebon.vercel.app",
@@ -59,7 +60,7 @@ function Status({ children, kind = "good" }: { children: ReactNode; kind?: "good
 export default function Dashboard() {
   const [active, setActive] = useState<ModuleKey>("overview");
   const [mobileNav, setMobileNav] = useState(false);
-  const [apiUrl, setApiUrl] = useState(import.meta.env.VITE_NOVA_API_URL || "");
+  const [apiUrl, setApiUrl] = useState(DEFAULT_NOVA_API_URL);
   const [apiRegistry, setApiRegistry] = useState<RegisteredApi[]>([]);
   const [moduleApiStatus, setModuleApiStatus] = useState<Record<string, "checking" | "online" | "offline">>({});
   const [apiState, setApiState] = useState<"unconfigured" | "checking" | "online" | "offline">("unconfigured");
@@ -79,17 +80,19 @@ export default function Dashboard() {
   const dataLabel = "Illustrative demo values · not field telemetry";
 
   useEffect(() => {
-    let saved: RegisteredApi[] = [];
+    const defaultCore: RegisteredApi = { id: "nova-core", name: "NOVA Core API", baseUrl: DEFAULT_NOVA_API_URL, owner: "NOVA Core" };
+    let saved: RegisteredApi[] = [defaultCore];
     try {
       const raw = localStorage.getItem("neohaven.nova.workbench.v1");
       const parsed = raw ? JSON.parse(raw) : null;
-      saved = Array.isArray(parsed?.apis) ? parsed.apis.filter((item: any) => item && typeof item.baseUrl === "string" && typeof item.owner === "string") : [];
+      saved = Array.isArray(parsed?.apis) ? parsed.apis.filter((item: any) => item && typeof item.baseUrl === "string" && typeof item.owner === "string") : [defaultCore];
+      if (!saved.some(item => item.owner === "NOVA Core")) saved.unshift(defaultCore);
     } catch {
-      saved = [];
+      saved = [defaultCore];
     }
     setApiRegistry(saved);
     const novaCore = saved.find(item => item.owner === "NOVA Core");
-    if (!import.meta.env.VITE_NOVA_API_URL && novaCore?.baseUrl) setApiUrl(novaCore.baseUrl);
+    if (novaCore?.baseUrl) setApiUrl(novaCore.baseUrl);
 
     if (!saved.length) return;
     let cancelled = false;
