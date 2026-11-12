@@ -9,6 +9,18 @@ import {
 type ModuleKey = "overview" | "neoagro" | "neogrid" | "neocell" | "data" | "scenarios";
 type RegisteredApi = { id: string; name: string; baseUrl: string; owner: string; status?: string; detail?: string };
 const DEFAULT_NOVA_API_URL = import.meta.env.VITE_NOVA_API_URL || "https://nova-core-api.neohaven.workers.dev";
+
+function normalizeApiBaseUrl(value: string): string {
+  const url = new URL(value.trim());
+  const localHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && localHost)) {
+    throw new Error("Use HTTPS for remote API endpoints; HTTP is allowed only for localhost.");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error("API base URL must not contain credentials, query parameters or fragments.");
+  }
+  return url.toString().replace(/\\/$/, "");
+}
 const PRODUCT_URLS: Partial<Record<ModuleKey, string>> = {
   neoagro: "https://neoagro-six.vercel.app",
   neocell: "https://neocell-ebon.vercel.app",
@@ -98,7 +110,7 @@ export default function Dashboard() {
     setModuleApiStatus(Object.fromEntries(saved.map(item => [item.owner, "checking" as const])));
     Promise.all(saved.map(async item => {
       try {
-        const response = await fetch(item.baseUrl.replace(/\/$/, "") + "/health", { headers: { Accept: "application/json" } });
+        const response = await fetch(normalizeApiBaseUrl(item.baseUrl) + "/health", { headers: { Accept: "application/json" }, cache: "no-store" });
         if (!response.ok) throw new Error("HTTP " + response.status);
         await response.json();
         return [item.owner, "online"] as const;
@@ -112,10 +124,10 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!apiUrl) return;
+    if (!apiUrl.trim()) return;
     let cancelled = false;
     setApiState("checking");
-    fetch(`${apiUrl.replace(/\/$/, "")}/health`)
+    fetch(`${normalizeApiBaseUrl(apiUrl)}/health`, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`API returned HTTP ${r.status}`);
         return r.json();
@@ -130,7 +142,7 @@ export default function Dashboard() {
     if (!apiUrl.trim()) { setApiState("unconfigured"); setApiMessage("Enter your deployed API base URL first."); return; }
     setApiState("checking");
     try {
-      const r = await fetch(`${apiUrl.replace(/\/$/, "")}/health`);
+      const r = await fetch(`${normalizeApiBaseUrl(apiUrl)}/health`, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       await r.json(); setApiState("online"); setApiMessage("API health check passed.");
     } catch (e: any) { setApiState("offline"); setApiMessage(e.message || "API health check failed."); }
@@ -144,7 +156,7 @@ export default function Dashboard() {
     setWeatherState("loading"); setWeatherError("");
     const end = new Date(); const start = new Date(); start.setDate(end.getDate() - Number(days) + 1);
     const fmt = (d: Date) => d.toISOString().slice(0, 10).replaceAll("-", "");
-    const url = `${apiUrl.replace(/\/$/, "")}/api/v1/data/weather/nasa-power/daily?latitude=${lat}&longitude=${lon}&start_date=${fmt(start)}&end_date=${fmt(end)}`;
+    const url = `${normalizeApiBaseUrl(apiUrl)}/api/v1/data/weather/nasa-power/daily?latitude=${lat}&longitude=${lon}&start_date=${fmt(start)}&end_date=${fmt(end)}`;
     try {
       const r = await fetch(url); const payload = await r.json();
       if (!r.ok) throw new Error(payload.detail || `HTTP ${r.status}`);
