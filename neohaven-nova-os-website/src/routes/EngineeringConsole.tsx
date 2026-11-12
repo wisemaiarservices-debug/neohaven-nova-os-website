@@ -62,7 +62,7 @@ function Panel({ title, subtitle, children }: { title: string; subtitle?: string
 }
 
 export default function EngineeringConsole() {
-  const [apis, setApis] = useState<ApiEntry[]>([]);
+  const [apis, setApis] = useState<ApiEntry[]>(() => readRegistry());
   const [health, setHealth] = useState<Record<string, HealthState>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
@@ -72,10 +72,6 @@ export default function EngineeringConsole() {
   const [catalogueState, setCatalogueState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [catalogueError, setCatalogueError] = useState("");
   const [activeTab, setActiveTab] = useState<"apis" | "data" | "training" | "deployments">("apis");
-
-  useEffect(() => {
-    setApis(readRegistry());
-  }, []);
 
   useEffect(() => {
     localStorage.setItem(REGISTRY_KEY, JSON.stringify({ apis }));
