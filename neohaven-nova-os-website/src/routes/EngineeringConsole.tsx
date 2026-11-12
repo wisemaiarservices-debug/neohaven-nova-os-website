@@ -42,13 +42,14 @@ function readRegistry(): ApiEntry[] {
 
 function normalizeBaseUrl(value: string): string {
   const url = new URL(value.trim());
-  if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
-    throw new Error("Use HTTPS for remote API endpoints.");
+  const localHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && localHost)) {
+    throw new Error("Use HTTPS for remote API endpoints; HTTP is allowed only for localhost.");
   }
   if (url.username || url.password || url.search || url.hash) {
     throw new Error("API base URL must not contain credentials, query parameters or fragments.");
   }
-  return url.toString().replace(/\/$/, "");
+  return url.toString().replace(/\\/+$/, "");
 }
 
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
