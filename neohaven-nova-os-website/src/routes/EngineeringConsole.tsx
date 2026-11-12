@@ -49,7 +49,7 @@ function normalizeBaseUrl(value: string): string {
   if (url.username || url.password || url.search || url.hash) {
     throw new Error("API base URL must not contain credentials, query parameters or fragments.");
   }
-  return url.toString().replace(/\\/+$/, "");
+  return url.toString().replace(/\/+$/, "");
 }
 
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
