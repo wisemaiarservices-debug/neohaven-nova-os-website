@@ -42,13 +42,14 @@ function readRegistry(): ApiEntry[] {
 
 function normalizeBaseUrl(value: string): string {
   const url = new URL(value.trim());
-  if (url.protocol !== "https:" && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
-    throw new Error("Use HTTPS for remote API endpoints.");
+  const localHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && localHost)) {
+    throw new Error("Use HTTPS for remote API endpoints; HTTP is allowed only for localhost.");
   }
   if (url.username || url.password || url.search || url.hash) {
     throw new Error("API base URL must not contain credentials, query parameters or fragments.");
   }
-  return url.toString().replace(/\/$/, "");
+  return url.toString().replace(/\/+$/, "");
 }
 
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
@@ -62,7 +63,7 @@ function Panel({ title, subtitle, children }: { title: string; subtitle?: string
 }
 
 export default function EngineeringConsole() {
-  const [apis, setApis] = useState<ApiEntry[]>([]);
+  const [apis, setApis] = useState<ApiEntry[]>(() => readRegistry());
   const [health, setHealth] = useState<Record<string, HealthState>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
@@ -72,10 +73,6 @@ export default function EngineeringConsole() {
   const [catalogueState, setCatalogueState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [catalogueError, setCatalogueError] = useState("");
   const [activeTab, setActiveTab] = useState<"apis" | "data" | "training" | "deployments">("apis");
-
-  useEffect(() => {
-    setApis(readRegistry());
-  }, []);
 
   useEffect(() => {
     localStorage.setItem(REGISTRY_KEY, JSON.stringify({ apis }));
@@ -161,7 +158,7 @@ export default function EngineeringConsole() {
     ["deployments", "Deployments", Layers3],
   ] as const;
 
-  return <div className="min-h-screen bg-background text-foreground">
+  return <div className="nova-console min-h-screen bg-background text-foreground">
     <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4">
         <div className="flex items-center gap-3">

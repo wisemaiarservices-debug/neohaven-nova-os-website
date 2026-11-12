@@ -2,12 +2,11 @@ name: NOVA OS website CI
 
 on:
   pull_request:
-    branches: [main]
     paths:
       - "neohaven-nova-os-website/**"
       - ".github/workflows/nova-os-website-ci.yml"
   push:
-    branches: [main]
+    branches: ["**"]
     paths:
       - "neohaven-nova-os-website/**"
       - ".github/workflows/nova-os-website-ci.yml"

@@ -9,6 +9,18 @@ import {
 type ModuleKey = "overview" | "neoagro" | "neogrid" | "neocell" | "data" | "scenarios";
 type RegisteredApi = { id: string; name: string; baseUrl: string; owner: string; status?: string; detail?: string };
 const DEFAULT_NOVA_API_URL = import.meta.env.VITE_NOVA_API_URL || "https://nova-core-api.neohaven.workers.dev";
+
+function normalizeApiBaseUrl(value: string): string {
+  const url = new URL(value.trim());
+  const localHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && localHost)) {
+    throw new Error("Use HTTPS for remote API endpoints; HTTP is allowed only for localhost.");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error("API base URL must not contain credentials, query parameters or fragments.");
+  }
+  return url.toString().replace(/\/+$/, "");
+}
 const PRODUCT_URLS: Partial<Record<ModuleKey, string>> = {
   neoagro: "https://neoagro-six.vercel.app",
   neocell: "https://neocell-ebon.vercel.app",
@@ -30,8 +42,8 @@ const NAV: { key: ModuleKey; label: string; icon: typeof LayoutDashboard }[] = [
 ];
 
 const DEMO = {
-  temperature: 29.4, soilMoisture: 34, solar: 42.6, battery: 67, water: 18.4,
-  gateway: 91, humidity: 48, rainfall: 0.8, wind: 3.2,
+  temperature: "—", soilMoisture: "—", solar: "—", battery: "—", water: "—",
+  gateway: "—", humidity: "—", rainfall: "—", wind: "—",
 };
 
 function Metric({ label, value, unit, note, icon: Icon, tone = "blue" }: {
@@ -64,7 +76,7 @@ export default function Dashboard() {
   const [apiRegistry, setApiRegistry] = useState<RegisteredApi[]>([]);
   const [moduleApiStatus, setModuleApiStatus] = useState<Record<string, "checking" | "online" | "offline">>({});
   const [apiState, setApiState] = useState<"unconfigured" | "checking" | "online" | "offline">("unconfigured");
-  const [apiMessage, setApiMessage] = useState("Connect a deployed NOVA API to replace demo values with live responses.");
+  const [apiMessage, setApiMessage] = useState("Check NOVA Core connectivity or request a provider dataset for a caller-supplied location.");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [weather, setWeather] = useState<any>(null);
@@ -75,9 +87,8 @@ export default function Dashboard() {
   const [scenarioValue, setScenarioValue] = useState(20);
 
   const isLive = apiState === "online";
-  // The overview charts and seeded metrics remain demo fixtures even after a separate provider request succeeds.
-  // NASA POWER provenance is shown only beside the actual provider response in the NeoAgro inspector.
-  const dataLabel = "Illustrative demo values · not field telemetry";
+  // API reachability is kept separate from site observations and provider datasets.
+  const dataLabel = "No verified site observations connected";
 
   useEffect(() => {
     const defaultCore: RegisteredApi = { id: "nova-core", name: "NOVA Core API", baseUrl: DEFAULT_NOVA_API_URL, owner: "NOVA Core" };
@@ -99,7 +110,7 @@ export default function Dashboard() {
     setModuleApiStatus(Object.fromEntries(saved.map(item => [item.owner, "checking" as const])));
     Promise.all(saved.map(async item => {
       try {
-        const response = await fetch(item.baseUrl.replace(/\/$/, "") + "/health", { headers: { Accept: "application/json" } });
+        const response = await fetch(normalizeApiBaseUrl(item.baseUrl) + "/health", { headers: { Accept: "application/json" }, cache: "no-store" });
         if (!response.ok) throw new Error("HTTP " + response.status);
         await response.json();
         return [item.owner, "online"] as const;
@@ -113,10 +124,22 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!apiUrl) return;
+    if (!apiUrl.trim()) {
+      setApiState("unconfigured");
+      setApiMessage("Enter your deployed API base URL first.");
+      return;
+    }
+    let endpoint: string;
+    try {
+      endpoint = normalizeApiBaseUrl(apiUrl) + "/health";
+    } catch (error) {
+      setApiState("offline");
+      setApiMessage(error instanceof Error ? error.message : "Invalid NOVA API base URL.");
+      return;
+    }
     let cancelled = false;
     setApiState("checking");
-    fetch(`${apiUrl.replace(/\/$/, "")}/health`)
+    fetch(endpoint, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`API returned HTTP ${r.status}`);
         return r.json();
@@ -126,12 +149,12 @@ export default function Dashboard() {
     return () => { cancelled = true; };
   }, [apiUrl]);
 
-  const chartValues = useMemo(() => [28, 31, 29, 35, 33, 39, 36, 42, 40, 46, 44, 49], []);
+  const chartValues = useMemo(() => [], []);
   async function checkApi() {
     if (!apiUrl.trim()) { setApiState("unconfigured"); setApiMessage("Enter your deployed API base URL first."); return; }
     setApiState("checking");
     try {
-      const r = await fetch(`${apiUrl.replace(/\/$/, "")}/health`);
+      const r = await fetch(`${normalizeApiBaseUrl(apiUrl)}/health`, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       await r.json(); setApiState("online"); setApiMessage("API health check passed.");
     } catch (e: any) { setApiState("offline"); setApiMessage(e.message || "API health check failed."); }
@@ -145,9 +168,9 @@ export default function Dashboard() {
     setWeatherState("loading"); setWeatherError("");
     const end = new Date(); const start = new Date(); start.setDate(end.getDate() - Number(days) + 1);
     const fmt = (d: Date) => d.toISOString().slice(0, 10).replaceAll("-", "");
-    const url = `${apiUrl.replace(/\/$/, "")}/api/v1/data/weather/nasa-power/daily?latitude=${lat}&longitude=${lon}&start_date=${fmt(start)}&end_date=${fmt(end)}`;
+    const url = `${normalizeApiBaseUrl(apiUrl)}/api/v1/data/weather/nasa-power/daily?latitude=${lat}&longitude=${lon}&start_date=${fmt(start)}&end_date=${fmt(end)}`;
     try {
-      const r = await fetch(url); const payload = await r.json();
+      const r = await fetch(url, { cache: "no-store" }); const payload = await r.json();
       if (!r.ok) throw new Error(payload.detail || `HTTP ${r.status}`);
       setWeather(payload); setWeatherState("loaded");
     } catch (e: any) { setWeatherState("error"); setWeatherError(e.message || "NASA POWER request failed."); }
@@ -156,7 +179,7 @@ export default function Dashboard() {
   return <div className="nova-shell">
     <aside className={`nova-sidebar ${mobileNav ? "nav-open" : ""}`}>
       <a className="nova-brand" href="/"><span className="nova-brand-mark">N</span><span><b>NeoHaven</b><small>URBAN LABS INC.</small></span></a>
-      <div className="nova-workspace"><span className="workspace-dot"/><span><b>NOVA Operations</b><small>DEMO WORKSPACE</small></span><ChevronDown size={14}/></div>
+      <div className="nova-workspace"><span className="workspace-dot"/><span><b>NOVA Operations</b><small>NO SITE SELECTED</small></span><ChevronDown size={14}/></div>
       <div className="nova-nav-label">PLATFORM</div>
       <nav>{NAV.map(({ key, label, icon: Icon }) => {
         const productUrl = PRODUCT_URLS[key];
@@ -168,11 +191,11 @@ export default function Dashboard() {
       <div className="nova-sidebar-bottom"><div className="nova-help"><CircleHelp size={17}/><span><b>Need a hand?</b><small>Read the platform guide</small></span><ExternalLink size={13}/></div><div className="nova-user"><div className="nova-avatar">NH</div><span><b>NeoHaven Operator</b><small>Read-only demo access</small></span><Settings2 size={16}/></div></div>
     </aside>
     <main className="nova-main">
-      <header className="nova-topbar"><button className="nova-mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu/></button><div className="nova-breadcrumb">Workspace <span>/</span> <b>{NAV.find(n => n.key === active)?.label}</b></div><div className="nova-top-actions"><a className="nova-button" href="/console">Engineering console <ExternalLink size={12}/></a><span className="nova-env"><i/> DEMO ENVIRONMENT</span><button className="nova-bell" aria-label="Notifications"><Bell size={17}/><i/></button><div className="nova-avatar small">NH</div></div></header>
+      <header className="nova-topbar"><button className="nova-mobile-menu" onClick={() => setMobileNav(!mobileNav)}><Menu/></button><div className="nova-breadcrumb">Workspace <span>/</span> <b>{NAV.find(n => n.key === active)?.label}</b></div><div className="nova-top-actions"><a className="nova-button" href="/console">Engineering console <ExternalLink size={12}/></a><span className="nova-env"><i/> PREVIEW ENVIRONMENT</span><button className="nova-bell" aria-label="Notifications"><Bell size={17}/><i/></button><div className="nova-avatar small">NH</div></div></header>
       <div className="nova-content">
-        <div className="nova-page-heading"><div><div className="nova-eyebrow">NOVA OS <span>•</span> INTELLIGENCE CONSOLE</div><h1>{NAV.find(n => n.key === active)?.label}</h1><p>{active === "overview" ? "A unified operational view across agriculture, energy and connected infrastructure." : pageDescription(active)}</p></div><div className="nova-heading-actions">{PRODUCT_URLS[active] && <><Status kind={moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "online" ? "good" : moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "offline" ? "warn" : "muted"}>{moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "online" ? "Module API reachable" : moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "offline" ? "Module API offline" : "No module API registered"}</Status><a className="nova-button" href={PRODUCT_URLS[active]} target="_blank" rel="noreferrer">Open production product <ExternalLink size={12}/></a><a className="nova-button" href={PRODUCT_PREVIEW_URLS[active] || PRODUCT_URLS[active]} target="_blank" rel="noreferrer">Open updated preview <ExternalLink size={12}/></a></>}<Status kind={apiState === "online" ? "good" : apiState === "offline" ? "warn" : "muted"}>{apiState === "online" ? "API connected" : apiState === "offline" ? "API offline" : "Demo mode"}</Status><button className="nova-button" onClick={checkApi}><RefreshCw size={14}/> Check connection</button></div></div>
+        <div className="nova-page-heading"><div><div className="nova-eyebrow">NOVA OS <span>•</span> INTELLIGENCE CONSOLE</div><h1>{NAV.find(n => n.key === active)?.label}</h1><p>{active === "overview" ? "A unified operational view across agriculture, energy and connected infrastructure." : pageDescription(active)}</p></div><div className="nova-heading-actions">{PRODUCT_URLS[active] && <><Status kind={moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "online" ? "good" : moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "offline" ? "warn" : "muted"}>{moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "online" ? "Module API reachable" : moduleApiStatus[active === "neoagro" ? "NeoAgro" : active === "neogrid" ? "NeoGrid" : "NeoCell"] === "offline" ? "Module API offline" : "No module API registered"}</Status><a className="nova-button" href={PRODUCT_URLS[active]} target="_blank" rel="noreferrer">Open production product <ExternalLink size={12}/></a><a className="nova-button" href={PRODUCT_PREVIEW_URLS[active] || PRODUCT_URLS[active]} target="_blank" rel="noreferrer">Open updated preview <ExternalLink size={12}/></a></>}<Status kind={apiState === "online" ? "good" : apiState === "offline" ? "warn" : "muted"}>{apiState === "online" ? "API connected" : apiState === "offline" ? "API offline" : "No site data"}</Status><button className="nova-button" onClick={checkApi}><RefreshCw size={14}/> Check connection</button></div></div>
 
-        <div className="nova-notice"><div className="notice-icon"><AlertTriangle size={16}/></div><div><b>Demonstration workspace</b><span>Displayed operational metrics are illustrative sample values until connected to verified site sensors or provider data. Recommendations are advisory and require operator review.</span></div><span className="notice-tag">PROVENANCE AWARE</span></div>
+        <div className="nova-notice"><div className="notice-icon"><ShieldCheck size={16}/></div><div><b>Evidence-gated operations</b><span>No pilot site is registered. Operational values remain unavailable until a site, source and timestamped observations are verified. Provider datasets are labelled separately from field measurements.</span></div><span className="notice-tag">HUMAN REVIEW REQUIRED</span></div>
 
         {active === "overview" && <Overview values={DEMO} chartValues={chartValues} dataLabel={dataLabel} apiUrl={apiUrl} setApiUrl={setApiUrl} apiMessage={apiMessage} apiState={apiState} onCheck={checkApi} apiRegistry={apiRegistry} moduleApiStatus={moduleApiStatus}/>}
         {active === "neoagro" && <NeoAgro values={DEMO} latitude={latitude} longitude={longitude} setLatitude={setLatitude} setLongitude={setLongitude} days={days} setDays={setDays} onLoad={loadWeather} weather={weather} weatherState={weatherState} weatherError={weatherError}/>}
@@ -193,23 +216,22 @@ function pageDescription(key: ModuleKey) {
 function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMessage, apiState, onCheck, apiRegistry, moduleApiStatus }: any) {
   return <>
     <div className="nova-metrics-grid">
-      <Metric label="Ambient temperature" value={v.temperature.toFixed(1)} unit="°C" note="Illustrative site input" icon={ThermometerSun}/>
-      <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="Below provisional 35% flag" icon={Droplets} tone="teal"/>
-      <Metric label="Solar generation" value={v.solar.toFixed(1)} unit="kW" note="Sample instantaneous value" icon={Sun} tone="amber"/>
-      <Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="Sample storage value" icon={BatteryCharging} tone="purple"/>
+      <Metric label="Ambient temperature" value={String(v.temperature)} unit="°C" note="No verified site data" icon={ThermometerSun}/>
+      <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="No crop or sensor data available" icon={Droplets} tone="teal"/>
+      <Metric label="Solar generation" value={String(v.solar)} unit="kW" note="No verified meter data" icon={Sun} tone="amber"/>
+      <Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="No verified battery data" icon={BatteryCharging} tone="purple"/>
     </div>
     <div className="nova-grid-two">
-      <Panel title="Site signals" subtitle="Illustrative trend · normalized sample series" action={<span className="nova-select-label">LAST 12 POINTS</span>}>
-        <div className="nova-chart-legend"><span><i className="legend-teal"/>Solar generation</span><span><i className="legend-blue"/>Soil moisture</span></div>
-        <div className="nova-chart"><div className="chart-y-labels"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><div className="chart-area"><div className="chart-gridlines"><i/><i/><i/><i/><i/></div><svg viewBox="0 0 600 180" preserveAspectRatio="none"><polyline points="0,120 55,108 110,116 165,85 220,95 275,72 330,82 385,48 440,59 495,36 550,43 600,25" fill="none" stroke="#66d7c1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><polyline points="0,90 55,95 110,88 165,100 220,91 275,105 330,97 385,112 440,105 495,118 550,110 600,116" fill="none" stroke="#7ca8ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg><div className="chart-x-labels"><span>01</span><span>03</span><span>05</span><span>07</span><span>09</span><span>11</span><span>12</span></div></div></div>
-        <div className="nova-chart-foot"><span>{dataLabel}</span><span>Not a measured time series</span></div>
+      <Panel title="Site signals" subtitle="Verified site observations · chronological series" action={<span className="nova-select-label">LIVE DATA WINDOW</span>}>
+        <div className="nova-empty"><Activity size={24}/><b>No verified site time series</b><span>Connect an approved site and ingest timestamped, unit-normalized observations to unlock trend analysis. No synthetic chart is substituted.</span></div>
+        <div className="nova-chart-foot"><span>Evidence-gated visualization</span><span>Awaiting observations</span></div>
       </Panel>
-      <Panel title="Resource balance" subtitle="Current illustrative operating snapshot">
-        <div className="resource-row"><div className="resource-icon teal"><Droplets size={17}/></div><div className="resource-info"><b>Water use</b><small>Daily site input</small></div><strong>18.4 <small>m³/day</small></strong></div>
-        <div className="resource-row"><div className="resource-icon amber"><Sun size={17}/></div><div className="resource-info"><b>Solar output</b><small>Instantaneous sample</small></div><strong>42.6 <small>kW</small></strong></div>
-        <div className="resource-row"><div className="resource-icon purple"><BatteryCharging size={17}/></div><div className="resource-info"><b>Battery charge</b><small>State of charge</small></div><strong>67 <small>%</small></strong></div>
-        <div className="resource-row"><div className="resource-icon blue"><Network size={17}/></div><div className="resource-info"><b>Gateway health</b><small>Sample device status</small></div><strong>91 <small>%</small></strong></div>
-        <div className="nova-progress"><span style={{width:"67%"}}/></div><div className="nova-chart-foot"><span>Battery SOC illustration</span><span>67%</span></div>
+      <Panel title="Resource balance" subtitle="Verified site measurements only">
+        <div className="resource-row"><div className="resource-icon teal"><Droplets size={17}/></div><div className="resource-info"><b>Water use</b><small>Awaiting verified water meter</small></div><strong>— <small>m³/day</small></strong></div>
+        <div className="resource-row"><div className="resource-icon amber"><Sun size={17}/></div><div className="resource-info"><b>Solar output</b><small>Awaiting verified inverter telemetry</small></div><strong>— <small>kW</small></strong></div>
+        <div className="resource-row"><div className="resource-icon purple"><BatteryCharging size={17}/></div><div className="resource-info"><b>Battery charge</b><small>State of charge</small></div><strong>— <small>%</small></strong></div>
+        <div className="resource-row"><div className="resource-icon blue"><Network size={17}/></div><div className="resource-info"><b>Gateway health</b><small>No registered gateway telemetry</small></div><strong>— <small>%</small></strong></div>
+        <div className="nova-empty compact"><span>Battery trend withheld until verified BMS observations are available.</span></div>
       </Panel>
     </div>
     <Panel title="Registered module connections" subtitle="API registry shared with the Engineering Console · health checks only">
@@ -218,8 +240,8 @@ function Overview({ values: v, chartValues, dataLabel, apiUrl, setApiUrl, apiMes
     </Panel>
     <div className="nova-grid-two lower-grid">
       <Panel title="Operational flags" subtitle="Rule-based screening · not validated diagnosis">
-        <div className="flag-row"><span className="flag-icon warn"><AlertTriangle size={16}/></span><div><b>Soil moisture screening flag</b><small>34% is below the provisional 35% rule threshold. Crop, soil and sensor calibration context required.</small></div><Status kind="warn">Review</Status></div>
-        <div className="flag-row"><span className="flag-icon good"><CheckCircle2 size={16}/></span><div><b>Battery input within bounds</b><small>67% is within the accepted 0–100% input range.</small></div><Status>Valid input</Status></div>
+        <div className="flag-row"><span className="flag-icon warn"><AlertTriangle size={16}/></span><div><b>Soil moisture assessment unavailable</b><small>No verified soil sensor observation, crop profile or calibration record is connected.</small></div><Status kind="muted">Not assessed</Status></div>
+        <div className="flag-row"><span className="flag-icon good"><CheckCircle2 size={16}/></span><div><b>Battery status not assessed</b><small>No verified BMS measurement is available for validation.</small></div><Status kind="muted">No data</Status></div>
         <div className="flag-row"><span className="flag-icon muted"><CircleHelp size={16}/></span><div><b>Impact accounting unavailable</b><small>No verified baseline/intervention data for savings, yield or carbon claims.</small></div><Status kind="muted">Not assessed</Status></div>
       </Panel>
       <Panel title="Connect NOVA Core API" subtitle="Link this console to the deployed FastAPI service">
@@ -244,10 +266,10 @@ function NeoAgro({ values: v, latitude, longitude, setLatitude, setLongitude, da
   ), 0);
   return <>
     <div className="nova-metrics-grid">
-      <Metric label="Soil moisture" value={String(v.soilMoisture)} unit="%" note="Illustrative input · no sensor feed" icon={Droplets} tone="teal"/>
-      <Metric label="Air temperature" value={v.temperature.toFixed(1)} unit="°C" note="Illustrative input" icon={ThermometerSun}/>
-      <Metric label="Relative humidity" value={String(v.humidity)} unit="%" note="Illustrative input" icon={Waves} tone="blue"/>
-      <Metric label="Rainfall" value={v.rainfall.toFixed(1)} unit="mm" note="Illustrative input" icon={Cloud} tone="purple"/>
+      <Metric label="Soil moisture" value="—" unit="%" note="No verified field sensor observation" icon={Droplets} tone="teal"/>
+      <Metric label="Air temperature" value="—" unit="°C" note="No verified site observation" icon={ThermometerSun}/>
+      <Metric label="Relative humidity" value="—" unit="%" note="No verified site observation" icon={Waves} tone="blue"/>
+      <Metric label="Rainfall" value="—" unit="mm" note="No verified site observation" icon={Cloud} tone="purple"/>
     </div>
     <div className="nova-grid-two">
       <Panel title="Climate data connector" subtitle="NASA POWER daily point data · public provider API">
@@ -257,10 +279,9 @@ function NeoAgro({ values: v, latitude, longitude, setLatitude, setLongitude, da
         {weatherState === "loaded" && <div className="nova-success"><CheckCircle2 size={15}/> Provider response received. Verify units and source metadata before operational use.</div>}
         <div className="field-hint">Requires the NOVA API to be deployed and reachable. NASA POWER values are gridded/model-derived estimates, not on-site station readings.</div>
       </Panel>
-      <Panel title="Agriculture screening" subtitle="Conservative rule flags · no crop-specific prescription">
-        <div className="agro-score"><div><span>Soil moisture input</span><b>34%</b></div><div className="agro-meter"><span style={{width:"34%"}}/></div><div className="agro-scale"><span>0%</span><span>35% provisional flag</span><span>100%</span></div></div>
-        <div className="flag-row"><span className="flag-icon warn"><AlertTriangle size={16}/></span><div><b>Review irrigation conditions</b><small>Confirm crop, root depth, soil texture, field capacity and sensor calibration before acting.</small></div><Status kind="warn">Review</Status></div>
-        <div className="flag-row"><span className="flag-icon muted"><CircleHelp size={16}/></span><div><b>ET₀ not yet calculated</b><small>Requires a validated FAO-56 implementation and complete meteorological inputs.</small></div><Status kind="muted">Pending</Status></div>
+      <Panel title="Agriculture assessment" subtitle="No crop-specific recommendation without verified field context">
+        <div className="nova-empty"><Sprout size={24}/><b>Assessment not available</b><span>Register the site boundary, crop and variety, soil profile, irrigation method and calibrated sensor observations before calculating water status or irrigation demand.</span></div>
+        <div className="flag-row"><span className="flag-icon muted"><CircleHelp size={16}/></span><div><b>Reference evapotranspiration not assessed</b><small>Requires complete meteorological inputs and a tested FAO-56 calculation with quality checks.</small></div><Status kind="muted">Not assessed</Status></div>
       </Panel>
     </div>
     <Panel title="NASA POWER data provenance" subtitle="Provider identity, request scope, units and completeness">
@@ -286,24 +307,24 @@ function CloudRainIcon(props: any) { return <Cloud {...props}/>; }
 
 function NeoGrid({ values: v }: any) {
   return <>
-    <div className="nova-metrics-grid"><Metric label="Solar generation" value={v.solar.toFixed(1)} unit="kW" note="Illustrative instantaneous value" icon={Sun} tone="amber"/><Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="Illustrative storage input" icon={BatteryCharging} tone="purple"/><Metric label="Grid import/export" value="—" note="No meter feed connected" icon={Zap}/><Metric label="Carbon intensity" value="—" note="No verified grid factor or meter data" icon={Factory} tone="teal"/></div>
-    <div className="nova-grid-two"><Panel title="Energy system overview" subtitle="Conceptual flow · not live telemetry"><div className="energy-flow"><div className="energy-node"><Sun/><b>PV array</b><strong>42.6 kW</strong><small>Sample input</small></div><div className="energy-arrow">→</div><div className="energy-node"><Zap/><b>Power bus</b><strong>—</strong><small>Not connected</small></div><div className="energy-arrow">→</div><div className="energy-node"><BatteryCharging/><b>Battery</b><strong>67% SOC</strong><small>Sample input</small></div></div><div className="nova-chart-foot">Flow diagram is illustrative. No power balance or dispatch optimization is being claimed.</div></Panel><Panel title="Grid readiness" subtitle="Data required for validated energy analytics"><div className="checklist-row"><CheckCircle2/> PV inverter telemetry <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Battery BMS feed <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Revenue-grade meter <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Tariff and grid factor <Status kind="warn">Missing</Status></div></Panel></div>
+    <div className="nova-metrics-grid"><Metric label="Solar generation" value={String(v.solar)} unit="kW" note="No verified inverter telemetry" icon={Sun} tone="amber"/><Metric label="Battery state of charge" value={String(v.battery)} unit="%" note="No verified BMS measurement" icon={BatteryCharging} tone="purple"/><Metric label="Grid import/export" value="—" note="No meter feed connected" icon={Zap}/><Metric label="Carbon intensity" value="—" note="No verified grid factor or meter data" icon={Factory} tone="teal"/></div>
+    <div className="nova-grid-two"><Panel title="Energy system overview" subtitle="Conceptual flow · not live telemetry"><div className="energy-flow"><div className="energy-node"><Sun/><b>PV array</b><strong>—</strong><small>No verified telemetry</small></div><div className="energy-arrow">→</div><div className="energy-node"><Zap/><b>Power bus</b><strong>—</strong><small>Not connected</small></div><div className="energy-arrow">→</div><div className="energy-node"><BatteryCharging/><b>Battery</b><strong>—</strong><small>No verified telemetry</small></div></div><div className="nova-chart-foot">Conceptual system topology only. No power balance or dispatch optimization is calculated.</div></Panel><Panel title="Grid readiness" subtitle="Data required for validated energy analytics"><div className="checklist-row"><CheckCircle2/> PV inverter telemetry <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Battery BMS feed <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Revenue-grade meter <Status kind="warn">Missing</Status></div><div className="checklist-row"><CheckCircle2/> Tariff and grid factor <Status kind="warn">Missing</Status></div></Panel></div>
   </>;
 }
 
 function NeoCell({ values: v }: any) {
   return <>
-    <div className="nova-metrics-grid"><Metric label="Gateway health" value={String(v.gateway)} unit="%" note="Illustrative status input" icon={Network} tone="teal"/><Metric label="Connected devices" value="—" note="No registry connected" icon={Cpu}/><Metric label="Telemetry freshness" value="—" note="No timestamps received" icon={Activity} tone="purple"/><Metric label="Open incidents" value="—" note="No incident system connected" icon={AlertTriangle} tone="amber"/></div>
+    <div className="nova-metrics-grid"><Metric label="Gateway health" value={String(v.gateway)} unit="%" note="No registered gateway observations" icon={Network} tone="teal"/><Metric label="Connected devices" value="—" note="No registry connected" icon={Cpu}/><Metric label="Telemetry freshness" value="—" note="No timestamps received" icon={Activity} tone="purple"/><Metric label="Open incidents" value="—" note="No incident system connected" icon={AlertTriangle} tone="amber"/></div>
     <div className="nova-grid-two"><Panel title="Infrastructure topology" subtitle="Target architecture · logical view"><div className="topology"><div className="topology-node root"><Network/><b>NOVA Core</b><small>Decision layer</small></div><div className="topology-branches"><div className="topology-node"><Sprout/><b>NeoAgro</b><small>Field / soil / weather</small></div><div className="topology-node"><Zap/><b>NeoGrid</b><small>PV / storage / meters</small></div><div className="topology-node"><Cpu/><b>NeoCell</b><small>Gateways / sensors</small></div></div></div></Panel><Panel title="Device trust checklist" subtitle="Before accepting telemetry"><div className="checklist-row"><ShieldCheck/> Device identity and ownership <Status kind="muted">Not configured</Status></div><div className="checklist-row"><ShieldCheck/> Signed / authenticated payloads <Status kind="muted">Not configured</Status></div><div className="checklist-row"><ShieldCheck/> Time synchronization <Status kind="muted">Not verified</Status></div><div className="checklist-row"><ShieldCheck/> Calibration records <Status kind="muted">Not supplied</Status></div></Panel></div>
   </>;
 }
 
 function DataPanel({ apiUrl, setApiUrl, apiState, apiMessage, onCheck, dataLabel }: any) {
-  return <div className="nova-grid-two"><Panel title="API connection" subtitle="FastAPI service endpoint"><label className="nova-field-label">API base URL</label><input className="nova-input" value={apiUrl} onChange={e=>setApiUrl(e.target.value)} placeholder="https://your-nova-api.example.com"/><div className="api-state-line"><span className={`api-dot ${apiState}`}/>{apiMessage}</div><button className="nova-button primary full" onClick={onCheck}><RefreshCw size={14}/> Run health check</button></Panel><Panel title="Current provenance state" subtitle="What the console is currently showing"><div className="provenance-card"><div className="provenance-icon"><ShieldCheck/></div><div><b>{dataLabel}</b><p>Demo indicators are seeded UI fixtures. They are not sensor observations and must not be used for operating decisions.</p></div></div><div className="provenance-list"><div><span>Data verification</span><Status kind="warn">Unverified</Status></div><div><span>Method class</span><b>Deterministic screening</b></div><div><span>Model training</span><b>None claimed</b></div><div><span>Impact estimates</span><b>Withheld pending baseline</b></div><div><span>Decision authority</span><b>Human operator</b></div></div></Panel><Panel title="Source classification" subtitle="Data classes supported in NOVA"><div className="source-row"><span className="source-dot live"/> Provider API / gridded model-derived data</div><div className="source-row"><span className="source-dot"/> Direct sensor / field observation</div><div className="source-row"><span className="source-dot demo"/> Synthetic or illustrative demo data</div><div className="source-row"><span className="source-dot rule"/> Deterministic rule output</div></Panel><Panel title="Measurement requirements" subtitle="Minimum evidence for impact claims"><ul className="nova-bullets"><li>Defined site boundary and reporting period</li><li>Metered baseline and intervention period</li><li>Units, calibration and data completeness</li><li>Weather normalization where appropriate</li><li>Transparent calculation and uncertainty</li></ul></Panel></div>;
+  return <div className="nova-grid-two"><Panel title="API connection" subtitle="FastAPI service endpoint"><label className="nova-field-label">API base URL</label><input className="nova-input" value={apiUrl} onChange={e=>setApiUrl(e.target.value)} placeholder="https://your-nova-api.example.com"/><div className="api-state-line"><span className={`api-dot ${apiState}`}/>{apiMessage}</div><button className="nova-button primary full" onClick={onCheck}><RefreshCw size={14}/> Run health check</button></Panel><Panel title="Current provenance state" subtitle="What the console is currently showing"><div className="provenance-card"><div className="provenance-icon"><ShieldCheck/></div><div><b>{dataLabel}</b><p>No site observation is currently available in this workspace. API health and external provider data are not equivalent to field telemetry.</p></div></div><div className="provenance-list"><div><span>Data verification</span><Status kind="muted">No site data</Status></div><div><span>Method class</span><b>No assessment executed</b></div><div><span>Model training</span><b>None claimed</b></div><div><span>Impact estimates</span><b>Withheld pending baseline</b></div><div><span>Decision authority</span><b>Human operator</b></div></div></Panel><Panel title="Source classification" subtitle="Data classes supported in NOVA"><div className="source-row"><span className="source-dot live"/> Provider API / gridded model-derived data</div><div className="source-row"><span className="source-dot"/> Direct sensor / field observation</div><div className="source-row"><span className="source-dot demo"/> Synthetic or illustrative data (excluded from operational decisions)</div><div className="source-row"><span className="source-dot rule"/> Deterministic rule output</div></Panel><Panel title="Measurement requirements" subtitle="Minimum evidence for impact claims"><ul className="nova-bullets"><li>Defined site boundary and reporting period</li><li>Metered baseline and intervention period</li><li>Units, calibration and data completeness</li><li>Weather normalization where appropriate</li><li>Transparent calculation and uncertainty</li></ul></Panel></div>;
 }
 
 function Scenarios({ scenario, setScenario, value, setValue }: any) {
   const title = scenario === "water" ? "Water-demand sensitivity" : scenario === "solar" ? "Solar capacity sensitivity" : "Battery capacity sensitivity";
-  const unit = scenario === "water" ? "%" : "kW";
+  const unit = scenario === "water" ? "%" : scenario === "solar" ? "kW" : "kWh";
   return <div className="nova-grid-two"><Panel title="Scenario controls" subtitle="Change assumptions to explore a what-if range"><label className="nova-field-label">Scenario type</label><select className="nova-input" value={scenario} onChange={e=>setScenario(e.target.value)}><option value="water">Water demand adjustment</option><option value="solar">Solar capacity adjustment</option><option value="battery">Battery capacity adjustment</option></select><div className="scenario-value"><span>Assumed adjustment</span><b>{value}{unit}</b></div><input className="nova-range" type="range" min="0" max="100" step="5" value={value} onChange={e=>setValue(Number(e.target.value))}/><div className="agro-scale"><span>0{unit}</span><span>100{unit}</span></div><div className="scenario-note"><AlertTriangle size={16}/> This is an assumption control only. No forecast, optimization, cost saving or engineering outcome is calculated.</div></Panel><Panel title="Scenario interpretation" subtitle={title}><div className="scenario-placeholder"><BarChart3 size={28}/><b>Awaiting verified baseline</b><span>Connect site measurements, define constraints and approve a calculation method before generating quantitative scenario outputs.</span></div><div className="provenance-list"><div><span>Input</span><b>User-defined assumption</b></div><div><span>Baseline</span><b>Not supplied</b></div><div><span>Calculation</span><b>Not executed</b></div><div><span>Recommendation</span><b>Human review required</b></div></div></Panel></div>;
 }
