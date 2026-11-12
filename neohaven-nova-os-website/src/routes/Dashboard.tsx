@@ -124,10 +124,22 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (!apiUrl.trim()) return;
+    if (!apiUrl.trim()) {
+      setApiState("unconfigured");
+      setApiMessage("Enter your deployed API base URL first.");
+      return;
+    }
+    let endpoint: string;
+    try {
+      endpoint = normalizeApiBaseUrl(apiUrl) + "/health";
+    } catch (error) {
+      setApiState("offline");
+      setApiMessage(error instanceof Error ? error.message : "Invalid NOVA API base URL.");
+      return;
+    }
     let cancelled = false;
     setApiState("checking");
-    fetch(`${normalizeApiBaseUrl(apiUrl)}/health`, { cache: "no-store" })
+    fetch(endpoint, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`API returned HTTP ${r.status}`);
         return r.json();
@@ -158,7 +170,7 @@ export default function Dashboard() {
     const fmt = (d: Date) => d.toISOString().slice(0, 10).replaceAll("-", "");
     const url = `${normalizeApiBaseUrl(apiUrl)}/api/v1/data/weather/nasa-power/daily?latitude=${lat}&longitude=${lon}&start_date=${fmt(start)}&end_date=${fmt(end)}`;
     try {
-      const r = await fetch(url); const payload = await r.json();
+      const r = await fetch(url, { cache: "no-store" }); const payload = await r.json();
       if (!r.ok) throw new Error(payload.detail || `HTTP ${r.status}`);
       setWeather(payload); setWeatherState("loaded");
     } catch (e: any) { setWeatherState("error"); setWeatherError(e.message || "NASA POWER request failed."); }
