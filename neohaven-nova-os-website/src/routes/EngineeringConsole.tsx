@@ -287,7 +287,8 @@ function evidenceString(data: Record<string, unknown>, key: string): string {
   return typeof data[key] === "string" ? data[key] as string : "—";
 }
 function evidenceNumber(data: Record<string, unknown>, key: string): string {
-  return typeof data[key] === "number" && Number.isFinite(data[key]) ? String(data[key]) : "—";
+  const value = data[key];
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : "—";
 }
 function evidenceMessage(result: EvidenceReadResult | null): string {
   if (!result) return "No request made yet.";
