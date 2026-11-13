@@ -73,7 +73,7 @@ export default function EngineeringConsole() {
   const [catalogue, setCatalogue] = useState<Dataset[]>([]);
   const [catalogueState, setCatalogueState] = useState<"idle" | "loading" | "loaded" | "error">("idle");
   const [catalogueError, setCatalogueError] = useState("");
-  const [activeTab, setActiveTab] = useState<"apis" | "data" | "training" | "deployments" | "evidence">("apis");
+  const [activeTab, setActiveTab] = useState<"apis" | "data" | "training" | "deployments" | "evidence">(() => new URLSearchParams(window.location.search).get("tab") === "evidence" ? "evidence" : "apis");
 
   useEffect(() => {
     localStorage.setItem(REGISTRY_KEY, JSON.stringify({ apis }));
