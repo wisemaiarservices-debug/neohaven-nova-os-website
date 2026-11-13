@@ -27,7 +27,7 @@ function configuredGateway(): URL | null {
   }
 }
 
-function isCalibrationRecord(value: unknown, tenantId: string, calibrationId: string): value is Record<string, unknown> {
+export function isCalibrationRecord(value: unknown, tenantId: string, calibrationId: string): value is Record<string, unknown> {
   if (!isRecord(value) || value.id !== calibrationId || value.tenant_id !== tenantId ||
       !ID_PATTERN.test(String(value.site_id ?? "")) || !ID_PATTERN.test(String(value.source_id ?? "")) ||
       !isText(value.instrument_serial) || !isText(value.metric) || !isText(value.unit) ||
@@ -50,7 +50,7 @@ function isCalibrationRecord(value: unknown, tenantId: string, calibrationId: st
       : ["registered", "revoked"].includes(String(latest.event_type));
 }
 
-function isMeasurementQuality(value: unknown, tenantId: string, observationId: string): value is Record<string, unknown> {
+export function isMeasurementQuality(value: unknown, tenantId: string, observationId: string): value is Record<string, unknown> {
   if (!isRecord(value) || value.id !== observationId || value.tenant_id !== tenantId ||
       value.observation_id !== observationId || !ID_PATTERN.test(String(value.source_id ?? "")) ||
       !isText(value.metric) || !isText(value.unit) || !isText(value.observation_verification_status) ||
@@ -123,25 +123,27 @@ async function readEvidence(
   }
 }
 
+export function buildCalibrationPath(tenantId: string, siteId: string, sourceId: string, calibrationId: string): string | null {
+  if (![tenantId, siteId, sourceId, calibrationId].every(value => ID_PATTERN.test(value)) || tenantId.length > 120) return null;
+  return "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/sites/" + encodeURIComponent(siteId) +
+    "/sources/" + encodeURIComponent(sourceId) + "/calibrations/" + encodeURIComponent(calibrationId);
+}
+export function buildObservationQualityPath(tenantId: string, observationId: string): string | null {
+  if (!ID_PATTERN.test(tenantId) || tenantId.length > 120 || !ID_PATTERN.test(observationId)) return null;
+  return "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/observations/" + encodeURIComponent(observationId) + "/measurement-quality";
+}
 export function readSourceCalibration(
   tenantId: string, siteId: string, sourceId: string, calibrationId: string, signal?: AbortSignal,
 ): Promise<EvidenceReadResult> {
-  if (![tenantId, siteId, sourceId, calibrationId].every(value => ID_PATTERN.test(value)) || tenantId.length > 120) {
-    return Promise.resolve({ ok: false, reason: "invalid_request", httpStatus: null });
-  }
-  const path = "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/sites/" +
-    encodeURIComponent(siteId) + "/sources/" + encodeURIComponent(sourceId) +
-    "/calibrations/" + encodeURIComponent(calibrationId);
+  const path = buildCalibrationPath(tenantId, siteId, sourceId, calibrationId);
+  if (!path) return Promise.resolve({ ok: false, reason: "invalid_request", httpStatus: null });
   return readEvidence(path, tenantId, calibrationId, isCalibrationRecord, signal);
 }
 
 export function readObservationMeasurementQuality(
   tenantId: string, observationId: string, signal?: AbortSignal,
 ): Promise<EvidenceReadResult> {
-  if (!ID_PATTERN.test(tenantId) || tenantId.length > 120 || !ID_PATTERN.test(observationId)) {
-    return Promise.resolve({ ok: false, reason: "invalid_request", httpStatus: null });
-  }
-  const path = "/api/v1/tenants/" + encodeURIComponent(tenantId) +
-    "/observations/" + encodeURIComponent(observationId) + "/measurement-quality";
+  const path = buildObservationQualityPath(tenantId, observationId);
+  if (!path) return Promise.resolve({ ok: false, reason: "invalid_request", httpStatus: null });
   return readEvidence(path, tenantId, observationId, isMeasurementQuality, signal);
 }
