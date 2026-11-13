@@ -30,6 +30,7 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.28.0 --activate
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:measurement-evidence
       - run: pnpm run build
       - name: Start Vite preview
         run: |
