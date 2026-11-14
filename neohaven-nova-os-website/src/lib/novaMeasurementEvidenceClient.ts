@@ -4,6 +4,22 @@ export type EvidenceReadResult =
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const MAX_RESPONSE_BYTES = 64 * 1024;
+const REASONS_BY_STATUS: Record<string, readonly string[]> = {
+  passed: ["within_approved_policy_bounds"],
+  failed: ["outside_approved_policy_bounds"],
+  not_assessed: [
+    "observation_not_verified",
+    "observation_measurement_fields_invalid",
+    "observation_provenance_invalid",
+    "non_field_evidence",
+    "ambiguous_sensor_mapping",
+    "verified_sensor_mapping_missing",
+    "ambiguous_verified_calibration",
+    "verified_calibration_missing_or_expired",
+    "ambiguous_quality_policy",
+    "approved_quality_policy_missing",
+  ],
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -23,13 +39,14 @@ function configuredGateway(): URL | null {
 
 export function isMeasurementQuality(value: unknown, tenantId: string, observationId: string): value is Record<string, unknown> {
   if (!isRecord(value) || value.tenant_id !== tenantId || value.observation_id !== observationId ||
-      !isText(value.id) || !isText(value.status) ||
-      !["passed", "failed", "not_assessed"].includes(value.status) ||
-      !isText(value.reason_code) || !isText(value.method_version)) return false;
+      !isText(value.id) || !isText(value.status) || !Object.hasOwn(REASONS_BY_STATUS, value.status) ||
+      !isText(value.reason_code) || !REASONS_BY_STATUS[value.status].includes(value.reason_code) ||
+      value.method_version !== "1.0.0") return false;
   for (const key of ["mapping_id", "calibration_id", "policy_id"]) {
     if (value[key] !== null && !isText(value[key])) return false;
   }
-  if (value.status === "passed" && (!isText(value.mapping_id) || !isText(value.calibration_id) || !isText(value.policy_id))) return false;
+  if (value.status !== "not_assessed" &&
+      (!isText(value.mapping_id) || !isText(value.calibration_id) || !isText(value.policy_id))) return false;
   return true;
 }
 
