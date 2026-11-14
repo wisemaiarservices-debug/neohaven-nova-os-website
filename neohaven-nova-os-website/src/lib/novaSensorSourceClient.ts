@@ -30,8 +30,8 @@ export async function submitSensorSourceMapping(input: {
  if (![tenantId,siteId,assetId].every(x=>ID.test(x)&&x.length<=120) || !text(input.evidenceRef,500) ||
    (action==="register" && (![input.sourceId,input.sensorId].every(x=>!!x&&ID.test(x)) ||
      !text(input.parameter,120)||!text(input.unit,48)||!text(input.mappingMethod,160)||
-     !input.effectiveFrom||!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(input.effectiveFrom)||!Number.isFinite(Date.parse(input.effectiveFrom))||
-     (input.effectiveTo!==undefined && input.effectiveTo!=="" && (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(input.effectiveTo)||!Number.isFinite(Date.parse(input.effectiveTo))||input.effectiveTo<=input.effectiveFrom)))) ||
+     !input.effectiveFrom||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(input.effectiveFrom)||!Number.isFinite(Date.parse(input.effectiveFrom))||
+     (input.effectiveTo!==undefined && input.effectiveTo!=="" && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(input.effectiveTo)||!Number.isFinite(Date.parse(input.effectiveTo))||input.effectiveTo<=input.effectiveFrom)))) ||
    (action!=="register" && (!input.mappingId||!ID.test(input.mappingId))) ||
    (action!=="verify" && action!=="register" && !text(input.reason,2000))) return {ok:false,reason:"invalid_request",httpStatus:null};
  const base=gateway(); if(!base)return {ok:false,reason:"not_configured",httpStatus:null};
