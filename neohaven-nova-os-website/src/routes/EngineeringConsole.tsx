@@ -395,10 +395,15 @@ function MeasurementEvidencePanel() {
   function resetRequestsForIdentifierChange() {
     qualityController.current?.abort();
     reviewController.current?.abort();
+    reviewerController.current?.abort();
     qualityController.current = null;
     reviewController.current = null;
+    reviewerController.current = null;
     setQualityLoading(false);
     setReviewLoading(false);
+    setReviewerLoading(false);
+    setReviewerConfirmation(false);
+    setReviewerResult(null);
     setAssessmentConfirmation(false);
     setReviewConfirmation(false);
     setQualityResult(null);
