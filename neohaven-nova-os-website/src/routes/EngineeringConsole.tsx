@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { readObservationMeasurementQuality, readSourceCalibration, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
+import { readObservationMeasurementQuality, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, ShieldCheck, Trash2, Wifi, XCircle
@@ -286,20 +286,16 @@ export default function EngineeringConsole() {
 function evidenceString(data: Record<string, unknown>, key: string): string {
   return typeof data[key] === "string" ? data[key] as string : "—";
 }
-function evidenceNumber(data: Record<string, unknown>, key: string): string {
-  const value = data[key];
-  return typeof value === "number" && Number.isFinite(value) ? String(value) : "—";
-}
 function evidenceMessage(result: EvidenceReadResult | null): string {
   if (!result) return "No request made yet.";
-  if (result.ok) return "Validated Core response · request " + result.requestId;
+  if (result.ok) return "Validated Core assessment · request " + result.requestId;
   const messages: Record<string, string> = {
     not_configured: "VITE_NOVA_TENANT_GATEWAY_URL is not configured.",
-    invalid_request: "Enter valid tenant and record identifiers.",
-    unauthorized: "Cloudflare Access or the exact tenant/site grant denied this browser session.",
-    not_found: "The record is not available in this tenant/site scope.",
+    invalid_request: "Enter valid tenant and observation identifiers.",
+    unauthorized: "Cloudflare Access or the exact tenant grant denied this browser session.",
+    not_found: "The observation is not available in this tenant scope.",
     unavailable: "The tenant gateway or NOVA Core is unavailable.",
-    invalid_response: "The response failed size, request-correlation or schema validation.",
+    invalid_response: "The response failed size, request-correlation or assessment-schema validation.",
     cancelled: "The request was cancelled.",
   };
   return messages[result.reason];
@@ -307,40 +303,16 @@ function evidenceMessage(result: EvidenceReadResult | null): string {
 
 function MeasurementEvidencePanel() {
   const [tenantId, setTenantId] = useState("");
-  const [siteId, setSiteId] = useState("");
-  const [sourceId, setSourceId] = useState("");
-  const [calibrationId, setCalibrationId] = useState("");
   const [observationId, setObservationId] = useState("");
-  const [calibrationResult, setCalibrationResult] = useState<EvidenceReadResult | null>(null);
   const [qualityResult, setQualityResult] = useState<EvidenceReadResult | null>(null);
-  const [calibrationLoading, setCalibrationLoading] = useState(false);
   const [qualityLoading, setQualityLoading] = useState(false);
-  const calibrationController = useRef<AbortController | null>(null);
   const qualityController = useRef<AbortController | null>(null);
 
   useEffect(() => () => {
-    const calibration = calibrationController.current;
-    const quality = qualityController.current;
-    calibrationController.current = null;
+    const request = qualityController.current;
     qualityController.current = null;
-    calibration?.abort();
-    quality?.abort();
+    request?.abort();
   }, []);
-
-  async function loadCalibration() {
-    calibrationController.current?.abort();
-    const controller = new AbortController();
-    calibrationController.current = controller;
-    setCalibrationLoading(true);
-    setCalibrationResult(null);
-    const result = await readSourceCalibration(tenantId.trim(), siteId.trim(),
-      sourceId.trim(), calibrationId.trim(), controller.signal);
-    if (!controller.signal.aborted) setCalibrationResult(result);
-    if (calibrationController.current === controller) {
-      calibrationController.current = null;
-      setCalibrationLoading(false);
-    }
-  }
 
   async function loadQuality() {
     qualityController.current?.abort();
@@ -357,23 +329,16 @@ function MeasurementEvidencePanel() {
     }
   }
 
-  const calibration = calibrationResult?.ok ? calibrationResult.data : null;
   const quality = qualityResult?.ok ? qualityResult.data : null;
-  const events = calibration && Array.isArray(calibration.events)
-    ? calibration.events as Record<string, unknown>[] : [];
-  const range = quality && quality.calibrated_range && typeof quality.calibrated_range === "object"
-    ? quality.calibrated_range as Record<string, unknown> : null;
-  const flags = quality && Array.isArray(quality.ingestion_quality_flags)
-    ? quality.ingestion_quality_flags.filter((flag): flag is string => typeof flag === "string") : [];
+  const status = evidenceString(quality ?? {}, "status");
+  const passed = status === "passed";
+  const failed = status === "failed";
 
   return <div className="space-y-5">
-    <Panel title="Exact tenant-scoped selectors" subtitle="Enter IDs issued by NOVA Core. No tenant, site, source or observation is guessed or filled with demo data.">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <Panel title="Exact tenant-scoped assessment" subtitle="Enter the exact tenant and observation IDs issued by NOVA Core. No records are guessed or populated with demo data.">
+      <div className="grid gap-3 sm:grid-cols-2">
         {([
           ["Tenant ID", tenantId, setTenantId],
-          ["Site ID", siteId, setSiteId],
-          ["Sensor source ID", sourceId, setSourceId],
-          ["Calibration ID", calibrationId, setCalibrationId],
           ["Observation ID", observationId, setObservationId],
         ] as const).map(([label, value, setter]) => <label key={label} className="grid gap-1.5 text-[11px] text-muted-foreground">
           {label}
@@ -382,74 +347,38 @@ function MeasurementEvidencePanel() {
             placeholder={label.toLowerCase().replaceAll(" ", "-")} />
         </label>)}
       </div>
-      <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-        Requires an active Cloudflare Access browser session, a configured tenant gateway origin and an exact site read grant. This console performs GET operations only.
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[11px] leading-5 text-muted-foreground">
+          Requires an active Cloudflare Access browser session, configured tenant gateway and an authorized tenant read grant. This action submits a POST assessment request; it does not change the original observation.
+        </p>
+        <button type="button" disabled={qualityLoading || !tenantId.trim() || !observationId.trim()}
+          onClick={() => void loadQuality()} className="inline-flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">
+          <RefreshCw size={13} className={qualityLoading ? "animate-spin" : ""}/> Run assessment
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">{evidenceMessage(qualityResult)}</p>
     </Panel>
 
-    <div className="grid gap-5 xl:grid-cols-2">
-      <Panel title="Source calibration record" subtitle="Declared instrument range, uncertainty and append-only reviewer history">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{evidenceMessage(calibrationResult)}</span>
-          <button type="button" disabled={calibrationLoading || !tenantId.trim() || !siteId.trim() || !sourceId.trim() || !calibrationId.trim()}
-            onClick={() => void loadCalibration()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">
-            <RefreshCw size={13} className={calibrationLoading ? "animate-spin" : ""}/> Read calibration
-          </button>
-        </div>
-        {calibration && <div className="mt-4 space-y-3">
-          <div className="flex items-center justify-between rounded-md border border-border bg-background/60 p-3 text-xs">
-            <span className="text-muted-foreground">Review status</span>
-            <b className={calibration.status === "verified" ? "text-emerald-400" : "text-amber-300"}>{evidenceString(calibration, "status")}</b>
-          </div>
-          <dl className="grid grid-cols-2 gap-3 text-xs">
-            <div><dt className="text-muted-foreground">Metric / unit</dt><dd className="mt-1">{evidenceString(calibration, "metric")} · {evidenceString(calibration, "unit")}</dd></div>
-            <div><dt className="text-muted-foreground">Instrument serial</dt><dd className="mt-1">{evidenceString(calibration, "instrument_serial")}</dd></div>
-            <div><dt className="text-muted-foreground">Calibration interval</dt><dd className="mt-1 break-words">{evidenceString(calibration, "calibrated_at")} → {evidenceString(calibration, "valid_until")}</dd></div>
-            <div><dt className="text-muted-foreground">Declared range</dt><dd className="mt-1">{evidenceNumber(calibration, "range_min")} – {evidenceNumber(calibration, "range_max")} {evidenceString(calibration, "unit")}</dd></div>
-            <div><dt className="text-muted-foreground">Uncertainty</dt><dd className="mt-1">{evidenceNumber(calibration, "uncertainty")} {evidenceString(calibration, "unit")}</dd></div>
-            <div><dt className="text-muted-foreground">Evidence reference</dt><dd className="mt-1 break-all">{evidenceString(calibration, "evidence_ref")}</dd></div>
-          </dl>
-          <div className="border-t border-border pt-3">
-            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Review history · {events.length}</h4>
-            {events.map((event, index) => <div key={String(event.request_id) + "-" + index} className="flex justify-between gap-3 border-b border-border/60 py-2 text-[10px] last:border-0">
-              <div><b>{evidenceString(event, "event_type")}</b><p className="mt-1 break-all text-muted-foreground">{evidenceString(event, "actor_subject")} · {evidenceString(event, "evidence_ref")}</p></div>
-              <time className="shrink-0 text-muted-foreground">{evidenceString(event, "occurred_at")}</time>
-            </div>)}
-          </div>
-        </div>}
-      </Panel>
+    {quality && <Panel title="NOVA Core measurement-quality result" subtitle="Deterministic comparison against an independently approved customer policy">
+      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-background/60 p-3 text-xs">
+        <span className="text-muted-foreground">Assessment status</span>
+        <b className={passed ? "text-emerald-400" : failed ? "text-red-400" : "text-amber-300"}>{status}</b>
+      </div>
+      <p className="mt-3 rounded-md border border-border bg-background/40 p-3 text-xs leading-5 text-muted-foreground">
+        Reason: {evidenceString(quality, "reason_code")}
+      </p>
+      <dl className="mt-4 grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+        <div><dt className="text-muted-foreground">Assessment record</dt><dd className="mt-1 break-all">{evidenceString(quality, "id")}</dd></div>
+        <div><dt className="text-muted-foreground">Method version</dt><dd className="mt-1">{evidenceString(quality, "method_version")}</dd></div>
+        <div><dt className="text-muted-foreground">Observation</dt><dd className="mt-1 break-all">{evidenceString(quality, "observation_id")}</dd></div>
+        <div><dt className="text-muted-foreground">Verified source mapping</dt><dd className="mt-1 break-all">{evidenceString(quality, "mapping_id")}</dd></div>
+        <div><dt className="text-muted-foreground">Verified calibration</dt><dd className="mt-1 break-all">{evidenceString(quality, "calibration_id")}</dd></div>
+        <div><dt className="text-muted-foreground">Approved quality policy</dt><dd className="mt-1 break-all">{evidenceString(quality, "policy_id")}</dd></div>
+      </dl>
+    </Panel>}
 
-      <Panel title="Observation measurement quality" subtitle="Calibration coverage at the observation timestamp, separate from observation verification">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground" role="status" aria-live="polite">{evidenceMessage(qualityResult)}</span>
-          <button type="button" disabled={qualityLoading || !tenantId.trim() || !observationId.trim()}
-            onClick={() => void loadQuality()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">
-            <Activity size={13}/> Assess observation
-          </button>
-        </div>
-        {quality && <div className="mt-4 space-y-3">
-          <div className="flex items-center justify-between rounded-md border border-border bg-background/60 p-3 text-xs">
-            <span className="text-muted-foreground">Calibration coverage</span>
-            <b className={quality.status === "covered_by_verified_calibration" ? "text-emerald-400" : "text-amber-300"}>{evidenceString(quality, "status")}</b>
-          </div>
-          {typeof quality.reason === "string" && <p className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-300">{quality.reason}</p>}
-          <dl className="grid grid-cols-2 gap-3 text-xs">
-            <div><dt className="text-muted-foreground">Observation verification</dt><dd className="mt-1">{evidenceString(quality, "observation_verification_status")}</dd></div>
-            <div><dt className="text-muted-foreground">Source / metric</dt><dd className="mt-1">{evidenceString(quality, "source_id")} · {evidenceString(quality, "metric")}</dd></div>
-            {range && <div><dt className="text-muted-foreground">Calibrated range</dt><dd className="mt-1">{String(range.minimum)} – {String(range.maximum)} {String(range.unit)}</dd></div>}
-            {typeof quality.uncertainty === "number" && <div><dt className="text-muted-foreground">Declared uncertainty</dt><dd className="mt-1">{evidenceNumber(quality, "uncertainty")} {evidenceString(quality, "unit")}</dd></div>}
-            {typeof quality.calibration_id === "string" && <div className="col-span-2"><dt className="text-muted-foreground">Calibration record</dt><dd className="mt-1 break-all">{quality.calibration_id}</dd></div>}
-          </dl>
-          <div className="border-t border-border pt-3">
-            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Original ingestion quality flags</h4>
-            {flags.length ? <div className="flex flex-wrap gap-2">{flags.map(flag => <span key={flag} className="rounded border border-border bg-background px-2 py-1 text-[10px]">{flag}</span>)}</div>
-              : <p className="text-[11px] text-muted-foreground">No ingestion quality flags were recorded.</p>}
-          </div>
-        </div>}
-      </Panel>
-    </div>
     <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] leading-5 text-amber-200/80">
-      Calibration coverage is advisory provenance. It does not verify the observation, prove laboratory accreditation or measurement accuracy, convert units, correct sensor values or authorize operational actions.
+      Passed means the observation value is within the explicit bounds of the independently approved policy after exact verified mapping and calibration checks. Failed means outside those bounds; it does not by itself mean unsafe or noncompliant. Not assessed means required evidence is missing, ambiguous, unverified or expired. The result does not prove scientific truth, laboratory accreditation or metrological traceability.
     </div>
   </div>;
 }
