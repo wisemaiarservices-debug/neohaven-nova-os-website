@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { readObservationMeasurementQuality, submitObservationVerification, submitObservationReviewerChange, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
 import { submitSensorSourceMapping, type SensorMappingAction, type SensorSourceResult } from "../lib/novaSensorSourceClient";
 import { submitCalibrationGovernance, type CalibrationAction, type CalibrationGovernanceResult } from "../lib/novaCalibrationGovernanceClient";
+import { submitQualityPolicy, type QualityPolicyAction, type QualityPolicyResult } from "../lib/novaQualityPolicyClient";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, ShieldCheck, Trash2, Wifi, XCircle
@@ -378,6 +379,33 @@ function CalibrationGovernancePanel() {
  </Panel>;
 }
 
+
+function QualityPolicyGovernancePanel(){
+ const [tenant,setTenant]=useState("");const [site,setSite]=useState("");const [asset,setAsset]=useState("");const [action,setAction]=useState<QualityPolicyAction>("register");const [policy,setPolicy]=useState("");const [sensor,setSensor]=useState("");const [parameter,setParameter]=useState("");const [unit,setUnit]=useState("");const [version,setVersion]=useState("1");const [minimum,setMinimum]=useState("");const [maximum,setMaximum]=useState("");const [from,setFrom]=useState("");const [to,setTo]=useState("");const [method,setMethod]=useState("");const [evidence,setEvidence]=useState("");const [reason,setReason]=useState("");const [confirm,setConfirm]=useState(false);const [loading,setLoading]=useState(false);const [result,setResult]=useState<QualityPolicyResult|null>(null);const controller=useRef<AbortController|null>(null);
+ useEffect(()=>()=>{controller.current?.abort();controller.current=null;},[]);
+ function reset(){controller.current?.abort();controller.current=null;setConfirm(false);setResult(null);setLoading(false)}
+ async function submit(){controller.current?.abort();const c=new AbortController();controller.current=c;setLoading(true);setConfirm(false);setResult(null);const iso=(v:string)=>v?new Date(v).toISOString():"";
+ const r=await submitQualityPolicy({tenant:tenant.trim(),site:site.trim(),asset:asset.trim(),action,policyId:policy.trim(),sensorId:sensor.trim(),parameter:parameter.trim(),unit:unit.trim(),version:version.trim(),minimum,maximum,from:action==="register"?iso(from):undefined,to:action==="register"&&to?iso(to):undefined,method:method.trim(),evidenceRef:evidence.trim(),reason:reason.trim(),signal:c.signal});
+ if(!c.signal.aborted)setResult(r);if(controller.current===c){controller.current=null;setLoading(false)}}
+ const field=(label:string,value:string,set:(v:string)=>void,placeholder:string,type="text")=><label className="grid gap-1.5 text-[11px] text-muted-foreground">{label}<input type={type} value={value} disabled={loading} onChange={e=>{set(e.target.value);setConfirm(false);setResult(null)}} autoComplete="off" spellCheck={false} className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder={placeholder}/></label>;
+ const registration=action==="register",needsReason=action==="reject"||action==="revoke";
+ const valid=tenant.trim()&&site.trim()&&asset.trim()&&policy.trim()&&evidence.trim()&&(registration?sensor.trim()&&parameter.trim()&&unit.trim()&&version.trim()&&(minimum!==""||maximum!=="")&&from&&method.trim():action==="verify"||reason.trim());
+ return <Panel title="Measurement quality policy governance" subtitle="Register explicit customer/site-specific numeric bounds and require independent measurement-reviewer approval before assessments can use them.">
+  <p className="mb-3 text-[11px] leading-5 text-muted-foreground">No default thresholds or automatic unit conversion. The policy applies only to its exact sensor, parameter, unit and effective interval. Registration is unverified until an assigned measurement reviewer approves it. A passed assessment means only that the recorded value falls within these approved bounds.</p>
+  <div className="grid gap-3 sm:grid-cols-2">
+   {field("Tenant ID",tenant,v=>{reset();setTenant(v)},"tenant-id")}{field("Site ID",site,v=>{reset();setSite(v)},"site-id")}{field("Asset ID",asset,v=>{reset();setAsset(v)},"asset-id")}
+   <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action<select value={action} disabled={loading} onChange={e=>{reset();setAction(e.target.value as QualityPolicyAction)}} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground"><option value="register">Register policy</option><option value="verify">Verify policy</option><option value="reject">Reject policy</option><option value="revoke">Revoke verified policy</option></select></label>
+   {field("Policy ID",policy,setPolicy,"policy-id")}
+   {registration&&<>{field("Sensor ID",sensor,setSensor,"sensor-id")}{field("Parameter (exact)",parameter,setParameter,"air_temperature")}{field("Unit (exact)",unit,setUnit,"degC")}{field("Policy version",version,setVersion,"1")}{field("Minimum value (optional)",minimum,setMinimum,"e.g. 0","number")}{field("Maximum value (optional)",maximum,setMaximum,"e.g. 45","number")}{field("Effective from (UTC)",from,setFrom,"","datetime-local")}{field("Effective to (optional UTC)",to,setTo,"","datetime-local")}{field("Policy method",method,setMethod,"customer-approved operating range")}</>}
+   {field("Evidence reference",evidence,setEvidence,"approved specification or evidence ID")}
+   {needsReason&&field("Reason (required)",reason,setReason,"document policy decision")}
+  </div>
+  <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] leading-5 text-muted-foreground">Core enforces tenant owner/admin registration, active assigned measurement reviewer, submitter independence and valid state transitions.</p><button type="button" disabled={!valid||loading} onClick={()=>setConfirm(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review policy action</button></div>
+  {confirm&&<div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm measurement quality policy action"><div className="text-xs font-semibold text-amber-200">Confirm {action} action</div><p className="mt-2 break-words text-xs leading-5 text-muted-foreground">Submit {action} for policy <strong className="text-foreground">{policy}</strong>, asset <strong className="text-foreground">{asset}</strong>, site <strong className="text-foreground">{site}</strong>, tenant <strong className="text-foreground">{tenant}</strong>. Core enforces permissions and evidence lifecycle.</p><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setConfirm(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button><button type="button" onClick={()=>void submit()} disabled={loading} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Confirm and submit</button></div></div>}
+  <p className="mt-3 text-xs text-muted-foreground" role="status" aria-live="polite">{result?.ok?"Core recorded "+String(result.data.status)+" · request "+result.requestId:result?"Core request not accepted: "+result.reason+(result.httpStatus?" (HTTP "+result.httpStatus+")":""):"No quality policy action submitted."}</p>
+ </Panel>;
+}
+
 function MeasurementEvidencePanel() {
   const [tenantId, setTenantId] = useState("");
   const [observationId, setObservationId] = useState("");
@@ -583,6 +611,7 @@ function MeasurementEvidencePanel() {
 
     <SensorSourceMappingPanel />
     <CalibrationGovernancePanel />
+    <QualityPolicyGovernancePanel />
     <Panel title="Observation verification" subtitle="Human reviewer decisions are recorded in NOVA Core as append-only evidence events. The authenticated reviewer identity is resolved server-side.">
       <p className="mb-3 text-[11px] leading-5 text-muted-foreground">The evidence reference is a reviewer-supplied pointer recorded in the event. This console does not upload, retrieve or authenticate the referenced material; verify it independently before submitting. A recorded reference is not proof that the underlying evidence is valid.</p>
       <div className="grid gap-3 sm:grid-cols-2">
