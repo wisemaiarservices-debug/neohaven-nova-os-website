@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { readObservationMeasurementQuality, submitObservationVerification, submitObservationReviewerChange, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
 import { submitSensorSourceMapping, type SensorMappingAction, type SensorSourceResult } from "../lib/novaSensorSourceClient";
+import { submitCalibrationGovernance, type CalibrationAction, type CalibrationGovernanceResult } from "../lib/novaCalibrationGovernanceClient";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, ShieldCheck, Trash2, Wifi, XCircle
@@ -343,6 +344,40 @@ function SensorSourceMappingPanel() {
   </Panel>;
 }
 
+
+function CalibrationGovernancePanel() {
+ const [tenant,setTenant]=useState("");const [site,setSite]=useState("");const [asset,setAsset]=useState("");const [calibration,setCalibration]=useState("");
+ const [action,setAction]=useState<CalibrationAction>("assign_reviewer");const [reviewer,setReviewer]=useState("");const [evidence,setEvidence]=useState("");const [reason,setReason]=useState("");
+ const [confirm,setConfirm]=useState(false);const [loading,setLoading]=useState(false);const [result,setResult]=useState<CalibrationGovernanceResult|null>(null);const controller=useRef<AbortController|null>(null);
+ useEffect(()=>()=>{controller.current?.abort();controller.current=null;},[]);
+ function reset(){controller.current?.abort();controller.current=null;setConfirm(false);setResult(null);setLoading(false);}
+ async function submit(){controller.current?.abort();const c=new AbortController();controller.current=c;setLoading(true);setConfirm(false);setResult(null);
+  const r=await submitCalibrationGovernance({tenant:tenant.trim(),site:site.trim(),asset:asset.trim(),action,calibrationId:calibration.trim(),reviewerSubject:reviewer.trim(),evidenceRef:evidence.trim(),reason:reason.trim(),signal:c.signal});
+  if(!c.signal.aborted)setResult(r);if(controller.current===c){controller.current=null;setLoading(false);}
+ }
+ const field=(label:string,value:string,set:(v:string)=>void,placeholder:string)=><label className="grid gap-1.5 text-[11px] text-muted-foreground">{label}<input value={value} disabled={loading} onChange={e=>{set(e.target.value);setConfirm(false);setResult(null);}} autoComplete="off" spellCheck={false} className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder={placeholder}/></label>;
+ const reviewerAction=action==="assign_reviewer"||action==="revoke_reviewer";
+ const requiresReason=action==="reject"||action==="revoke"||action==="revoke_reviewer";
+ const valid=tenant.trim()&&site.trim()&&asset.trim()&&evidence.trim()&&(reviewerAction?reviewer.trim():calibration.trim())&&(!requiresReason||reason.trim());
+ return <Panel title="Sensor calibration governance" subtitle="Assign independent calibration reviewers and record verification decisions against exact tenant, site, asset and calibration records.">
+  <p className="mb-3 text-[11px] leading-5 text-muted-foreground">Calibration verification requires an already registered certificate evidence record. For a verify action, the evidence reference must exactly match the calibration's registered certificate ID. The registry still labels uploaded laboratory reports as registered-unverified; this workflow does not accredit laboratories or prove metrological traceability.</p>
+  <div className="grid gap-3 sm:grid-cols-2">
+   {field("Tenant ID",tenant,v=>{reset();setTenant(v)},"tenant-id")}
+   {field("Site ID",site,v=>{reset();setSite(v)},"site-id")}
+   {field("Asset ID",asset,v=>{reset();setAsset(v)},"asset-id")}
+   <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action<select value={action} disabled={loading} onChange={e=>{reset();setAction(e.target.value as CalibrationAction)}} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
+    <option value="assign_reviewer">Assign calibration reviewer</option><option value="revoke_reviewer">Revoke calibration reviewer</option><option value="verify">Verify calibration</option><option value="reject">Reject calibration</option><option value="revoke">Revoke verified calibration</option>
+   </select></label>
+   {reviewerAction?field("Reviewer subject",reviewer,setReviewer,"active tenant member subject"):field("Calibration ID",calibration,setCalibration,"calibration-record-id")}
+   {field(reviewerAction?"Assignment evidence reference":"Certificate / decision evidence reference",evidence,setEvidence,"registered evidence identifier")}
+   {requiresReason&&field("Reason (required)",reason,setReason,"document the reason for this decision")}
+  </div>
+  <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] leading-5 text-muted-foreground">Core enforces tenant owner/admin reviewer assignment, active membership, independent review and valid lifecycle transitions. The reviewer actor is derived from Access authentication.</p><button type="button" disabled={!valid||loading} onClick={()=>setConfirm(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review calibration action</button></div>
+  {confirm&&<div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm calibration governance action"><div className="text-xs font-semibold text-amber-200">Confirm {action.replaceAll("_"," ")}</div><p className="mt-2 break-words text-xs leading-5 text-muted-foreground">Submit this action for tenant <strong className="text-foreground">{tenant}</strong>, site <strong className="text-foreground">{site}</strong>, asset <strong className="text-foreground">{asset}</strong>, {reviewerAction?"reviewer":"calibration"} <strong className="text-foreground">{reviewerAction?reviewer:calibration}</strong>. Core remains authoritative for all permission and evidence checks.</p><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setConfirm(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button><button type="button" disabled={loading} onClick={()=>void submit()} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Confirm and submit</button></div></div>}
+  <p className="mt-3 text-xs text-muted-foreground" role="status" aria-live="polite">{result?.ok?"Core recorded "+String(result.data.status??result.data.verification_status)+" · request "+result.requestId:result?"Core request not accepted: "+result.reason+(result.httpStatus?" (HTTP "+result.httpStatus+")":""):"No calibration governance action submitted."}</p>
+ </Panel>;
+}
+
 function MeasurementEvidencePanel() {
   const [tenantId, setTenantId] = useState("");
   const [observationId, setObservationId] = useState("");
@@ -547,6 +582,7 @@ function MeasurementEvidencePanel() {
     </Panel>
 
     <SensorSourceMappingPanel />
+    <CalibrationGovernancePanel />
     <Panel title="Observation verification" subtitle="Human reviewer decisions are recorded in NOVA Core as append-only evidence events. The authenticated reviewer identity is resolved server-side.">
       <p className="mb-3 text-[11px] leading-5 text-muted-foreground">The evidence reference is a reviewer-supplied pointer recorded in the event. This console does not upload, retrieve or authenticate the referenced material; verify it independently before submitting. A recorded reference is not proof that the underlying evidence is valid.</p>
       <div className="grid gap-3 sm:grid-cols-2">
