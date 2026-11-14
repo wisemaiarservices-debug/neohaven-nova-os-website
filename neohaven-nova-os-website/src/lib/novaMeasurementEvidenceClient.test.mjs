@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildObservationQualityPath, isMeasurementQuality } from "./novaMeasurementEvidenceClient.ts";
+import { buildObservationQualityPath, isMeasurementQuality, isObservationVerification } from "./novaMeasurementEvidenceClient.ts";
 
 const assessment = {
   id: "assessment-1",
@@ -53,4 +53,36 @@ test("builds the exact POST assessment path and rejects malformed identifiers", 
     "/api/v1/tenants/tenant-a/observations/obs-1/measurement-quality-assessment");
   assert.equal(buildObservationQualityPath("tenant/a", "obs-1"), null);
   assert.equal(buildObservationQualityPath("tenant-a", "../obs"), null);
+});
+
+const verification = {
+  tenant_id: "tenant-a",
+  observation_id: "obs-1",
+  site_id: "site-1",
+  reviewer_subject: "reviewer@example.test",
+};
+
+test("validates observation verification state transitions exactly", () => {
+  const transitions = [
+    ["verify", "verified", "verified"],
+    ["reject", "rejected", "rejected"],
+    ["revoke", "unverified", "revoked"],
+  ];
+  for (const [decision, verification_status, event_type] of transitions) {
+    assert.equal(isObservationVerification({
+      ...verification, verification_status, event_type,
+    }, "tenant-a", "obs-1", decision), true);
+  }
+});
+
+test("rejects cross-tenant, wrong-observation and mismatched review outcomes", () => {
+  assert.equal(isObservationVerification({
+    ...verification, verification_status: "verified", event_type: "verified",
+  }, "tenant-b", "obs-1", "verify"), false);
+  assert.equal(isObservationVerification({
+    ...verification, verification_status: "verified", event_type: "verified",
+  }, "tenant-a", "obs-2", "verify"), false);
+  assert.equal(isObservationVerification({
+    ...verification, verification_status: "rejected", event_type: "rejected",
+  }, "tenant-a", "obs-1", "verify"), false);
 });
