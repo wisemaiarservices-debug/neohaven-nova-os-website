@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildObservationQualityPath, isMeasurementQuality, isObservationVerification } from "./novaMeasurementEvidenceClient.ts";
+import { buildObservationQualityPath, isMeasurementQuality, isObservationVerification, isObservationReviewerChange } from "./novaMeasurementEvidenceClient.ts";
 
 const assessment = {
   id: "assessment-1",
@@ -85,4 +85,30 @@ test("rejects cross-tenant, wrong-observation and mismatched review outcomes", (
   assert.equal(isObservationVerification({
     ...verification, verification_status: "rejected", event_type: "rejected",
   }, "tenant-a", "obs-1", "verify"), false);
+});
+
+const reviewerChange = {
+  tenant_id: "tenant-a", site_id: "site-1", reviewer_subject: "reviewer@example.test",
+  reviewer_role: "measurement_reviewer",
+};
+
+test("validates exact tenant/site/reviewer scope and assignment lifecycle responses", () => {
+  assert.equal(isObservationReviewerChange({
+    ...reviewerChange, status: "active", event_type: "assigned",
+  }, "tenant-a", "site-1", "reviewer@example.test", "assign"), true);
+  assert.equal(isObservationReviewerChange({
+    ...reviewerChange, status: "revoked", event_type: "revoked",
+  }, "tenant-a", "site-1", "reviewer@example.test", "revoke"), true);
+  assert.equal(isObservationReviewerChange({
+    ...reviewerChange, status: "active", event_type: "assigned",
+  }, "tenant-b", "site-1", "reviewer@example.test", "assign"), false);
+  assert.equal(isObservationReviewerChange({
+    ...reviewerChange, status: "active", event_type: "assigned",
+  }, "tenant-a", "site-2", "reviewer@example.test", "assign"), false);
+  assert.equal(isObservationReviewerChange({
+    ...reviewerChange, status: "active", event_type: "assigned",
+  }, "tenant-a", "site-1", "other@example.test", "assign"), false);
+  assert.equal(isObservationReviewerChange({
+    ...reviewerChange, status: "active", event_type: "assigned", reviewer_role: "tenant_admin",
+  }, "tenant-a", "site-1", "reviewer@example.test", "assign"), false);
 });
