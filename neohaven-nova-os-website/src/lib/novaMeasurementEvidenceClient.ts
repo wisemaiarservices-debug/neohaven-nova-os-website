@@ -50,6 +50,79 @@ export function isMeasurementQuality(value: unknown, tenantId: string, observati
   return true;
 }
 
+const OBSERVATION_DECISIONS = {
+  verify: { verification_status: "verified", event_type: "verified" },
+  reject: { verification_status: "rejected", event_type: "rejected" },
+  revoke: { verification_status: "unverified", event_type: "revoked" },
+} as const;
+
+export function isObservationVerification(
+  value: unknown, tenantId: string, observationId: string, decision: keyof typeof OBSERVATION_DECISIONS,
+): value is Record<string, unknown> {
+  const expected = OBSERVATION_DECISIONS[decision];
+  return isRecord(value) && value.tenant_id === tenantId && value.observation_id === observationId &&
+    isText(value.site_id) && value.verification_status === expected.verification_status &&
+    value.event_type === expected.event_type && isText(value.reviewer_subject);
+}
+
+export async function submitObservationVerification(
+  tenantId: string, observationId: string, decision: keyof typeof OBSERVATION_DECISIONS,
+  evidenceRef: string, reason: string, signal?: AbortSignal,
+): Promise<EvidenceReadResult> {
+  const path = ID_PATTERN.test(tenantId) && tenantId.length <= 120 && ID_PATTERN.test(observationId)
+    ? "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/observations/" +
+      encodeURIComponent(observationId) + "/verification" : null;
+  if (!path || !isText(evidenceRef) || evidenceRef.length > 500 ||
+      (decision !== "verify" && !isText(reason)) || (reason && reason.length > 2000)) {
+    return { ok: false, reason: "invalid_request", httpStatus: null };
+  }
+  const gateway = configuredGateway();
+  if (!gateway) return { ok: false, reason: "not_configured", httpStatus: null };
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    const body = { decision, evidence_ref: evidenceRef, ...(reason ? { reason } : {}) };
+    const response = await fetch(new URL(path, gateway), {
+      method: "POST", credentials: "include", cache: "no-store",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body), signal: controller.signal,
+    });
+    if (!response.ok) {
+      const failure = response.status === 401 || response.status === 403 ? "unauthorized"
+        : response.status === 404 ? "not_found"
+          : response.status >= 500 ? "unavailable" : "invalid_response";
+      return { ok: false, reason: failure, httpStatus: response.status };
+    }
+    const declaredLength = Number(response.headers.get("content-length") || 0);
+    if (declaredLength > MAX_RESPONSE_BYTES ||
+        !(response.headers.get("content-type") || "").toLowerCase().includes("application/json")) {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    const raw = await response.text();
+    if (new TextEncoder().encode(raw).byteLength > MAX_RESPONSE_BYTES) {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    let payload: unknown;
+    try { payload = JSON.parse(raw); } catch {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    if (!isRecord(payload) || !isRecord(payload.data) || !isText(payload.request_id) ||
+        payload.request_id !== response.headers.get("x-request-id") ||
+        !isObservationVerification(payload.data, tenantId, observationId, decision)) {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    return { ok: true, data: payload.data, requestId: payload.request_id };
+  } catch {
+    if (controller.signal.aborted) return { ok: false, reason: "cancelled", httpStatus: null };
+    return { ok: false, reason: "unavailable", httpStatus: null };
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
 export function buildObservationQualityPath(tenantId: string, observationId: string): string | null {
   if (!ID_PATTERN.test(tenantId) || tenantId.length > 120 || !ID_PATTERN.test(observationId)) return null;
   return "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/observations/" +
