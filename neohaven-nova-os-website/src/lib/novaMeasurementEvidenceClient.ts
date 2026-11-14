@@ -9,12 +9,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function isText(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= 2000;
+  return typeof value === "string" && value.length > 0 && value.length <= 2000 && value.trim() === value;
 }
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
 function configuredGateway(): URL | null {
   const raw = import.meta.env.VITE_NOVA_TENANT_GATEWAY_URL;
   if (typeof raw !== "string" || !raw.trim()) return null;
@@ -22,59 +18,32 @@ function configuredGateway(): URL | null {
     const url = new URL(raw.trim());
     if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return null;
     return url;
-  } catch {
-    return null;
-  }
-}
-
-export function isCalibrationRecord(value: unknown, tenantId: string, calibrationId: string): value is Record<string, unknown> {
-  if (!isRecord(value) || value.id !== calibrationId || value.tenant_id !== tenantId ||
-      !ID_PATTERN.test(String(value.site_id ?? "")) || !ID_PATTERN.test(String(value.source_id ?? "")) ||
-      !isText(value.instrument_serial) || !isText(value.metric) || !isText(value.unit) ||
-      !["laboratory", "field_comparison", "manufacturer", "reference_instrument", "other"].includes(String(value.calibration_method)) ||
-      !isText(value.calibration_standard) || !isText(value.calibrated_at) || !isText(value.valid_until) ||
-      !isFiniteNumber(value.range_min) || !isFiniteNumber(value.range_max) || value.range_min > value.range_max ||
-      !isFiniteNumber(value.uncertainty) || value.uncertainty < 0 || !isText(value.evidence_ref) ||
-      !isText(value.created_by_subject) || !["unverified", "verified", "rejected"].includes(String(value.status)) ||
-      !isText(value.created_at) || !Array.isArray(value.events) || value.events.length === 0) return false;
-  const eventsValid = value.events.every(event => isRecord(event) &&
-    ["registered", "verified", "rejected", "revoked"].includes(String(event.event_type)) &&
-    isText(event.actor_subject) &&
-    (event.reviewer_role === null || event.reviewer_role === "measurement_reviewer") &&
-    isText(event.evidence_ref) && (event.reason === null || isText(event.reason)) &&
-    isText(event.request_id) && isText(event.occurred_at));
-  if (!eventsValid) return false;
-  const latest = value.events[value.events.length - 1] as Record<string, unknown>;
-  return value.status === "verified" ? latest.event_type === "verified"
-    : value.status === "rejected" ? latest.event_type === "rejected"
-      : ["registered", "revoked"].includes(String(latest.event_type));
+  } catch { return null; }
 }
 
 export function isMeasurementQuality(value: unknown, tenantId: string, observationId: string): value is Record<string, unknown> {
-  if (!isRecord(value) || value.id !== observationId || value.tenant_id !== tenantId ||
-      value.observation_id !== observationId || !ID_PATTERN.test(String(value.source_id ?? "")) ||
-      !isText(value.metric) || !isText(value.unit) || !isText(value.observation_verification_status) ||
-      !Array.isArray(value.ingestion_quality_flags) ||
-      !value.ingestion_quality_flags.every(flag => typeof flag === "string") ||
-      !["covered_by_verified_calibration", "not_assessed"].includes(String(value.status))) return false;
-  if (value.status === "not_assessed") return isText(value.reason);
-  if (!isText(value.calibration_id) || !isText(value.calibrated_at) || !isText(value.valid_until) ||
-      !isText(value.calibration_method) || !isText(value.calibration_standard) ||
-      !isFiniteNumber(value.uncertainty) || value.uncertainty < 0 || !isText(value.evidence_ref) ||
-      !isRecord(value.calibrated_range) || !isFiniteNumber(value.calibrated_range.minimum) ||
-      !isFiniteNumber(value.calibrated_range.maximum) ||
-      value.calibrated_range.minimum > value.calibrated_range.maximum ||
-      value.calibrated_range.unit !== value.unit) return false;
+  if (!isRecord(value) || value.tenant_id !== tenantId || value.observation_id !== observationId ||
+      !isText(value.id) || !isText(value.status) ||
+      !["passed", "failed", "not_assessed"].includes(value.status) ||
+      !isText(value.reason_code) || !isText(value.method_version)) return false;
+  for (const key of ["mapping_id", "calibration_id", "policy_id"]) {
+    if (value[key] !== null && !isText(value[key])) return false;
+  }
+  if (value.status === "passed" && (!isText(value.mapping_id) || !isText(value.calibration_id) || !isText(value.policy_id))) return false;
   return true;
 }
 
-async function readEvidence(
-  path: string,
-  tenantId: string,
-  resourceId: string,
-  validator: (value: unknown, tenant: string, id: string) => value is Record<string, unknown>,
-  signal?: AbortSignal,
+export function buildObservationQualityPath(tenantId: string, observationId: string): string | null {
+  if (!ID_PATTERN.test(tenantId) || tenantId.length > 120 || !ID_PATTERN.test(observationId)) return null;
+  return "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/observations/" +
+    encodeURIComponent(observationId) + "/measurement-quality-assessment";
+}
+
+export async function readObservationMeasurementQuality(
+  tenantId: string, observationId: string, signal?: AbortSignal,
 ): Promise<EvidenceReadResult> {
+  const path = buildObservationQualityPath(tenantId, observationId);
+  if (!path) return { ok: false, reason: "invalid_request", httpStatus: null };
   const gateway = configuredGateway();
   if (!gateway) return { ok: false, reason: "not_configured", httpStatus: null };
   const controller = new AbortController();
@@ -83,10 +52,11 @@ async function readEvidence(
   const timeout = window.setTimeout(() => controller.abort(), 8000);
   try {
     const response = await fetch(new URL(path, gateway), {
-      method: "GET",
+      method: "POST",
       credentials: "include",
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: "{}",
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -110,40 +80,15 @@ async function readEvidence(
     }
     if (!isRecord(payload) || !isRecord(payload.data) || !isText(payload.request_id) ||
         payload.request_id !== response.headers.get("x-request-id") ||
-        !validator(payload.data, tenantId, resourceId)) {
+        !isMeasurementQuality(payload.data, tenantId, observationId)) {
       return { ok: false, reason: "invalid_response", httpStatus: response.status };
     }
     return { ok: true, data: payload.data, requestId: payload.request_id };
-  } catch (error) {
+  } catch {
     if (controller.signal.aborted) return { ok: false, reason: "cancelled", httpStatus: null };
     return { ok: false, reason: "unavailable", httpStatus: null };
   } finally {
     window.clearTimeout(timeout);
     signal?.removeEventListener("abort", abort);
   }
-}
-
-export function buildCalibrationPath(tenantId: string, siteId: string, sourceId: string, calibrationId: string): string | null {
-  if (![tenantId, siteId, sourceId, calibrationId].every(value => ID_PATTERN.test(value)) || tenantId.length > 120) return null;
-  return "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/sites/" + encodeURIComponent(siteId) +
-    "/sources/" + encodeURIComponent(sourceId) + "/calibrations/" + encodeURIComponent(calibrationId);
-}
-export function buildObservationQualityPath(tenantId: string, observationId: string): string | null {
-  if (!ID_PATTERN.test(tenantId) || tenantId.length > 120 || !ID_PATTERN.test(observationId)) return null;
-  return "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/observations/" + encodeURIComponent(observationId) + "/measurement-quality";
-}
-export function readSourceCalibration(
-  tenantId: string, siteId: string, sourceId: string, calibrationId: string, signal?: AbortSignal,
-): Promise<EvidenceReadResult> {
-  const path = buildCalibrationPath(tenantId, siteId, sourceId, calibrationId);
-  if (!path) return Promise.resolve({ ok: false, reason: "invalid_request", httpStatus: null });
-  return readEvidence(path, tenantId, calibrationId, isCalibrationRecord, signal);
-}
-
-export function readObservationMeasurementQuality(
-  tenantId: string, observationId: string, signal?: AbortSignal,
-): Promise<EvidenceReadResult> {
-  const path = buildObservationQualityPath(tenantId, observationId);
-  if (!path) return Promise.resolve({ ok: false, reason: "invalid_request", httpStatus: null });
-  return readEvidence(path, tenantId, observationId, isMeasurementQuality, signal);
 }
