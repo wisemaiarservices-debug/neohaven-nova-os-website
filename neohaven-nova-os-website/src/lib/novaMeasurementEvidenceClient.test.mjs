@@ -14,25 +14,38 @@ const assessment = {
   method_version: "1.0.0",
 };
 
-test("validates the current Core assessment contract and exact tenant/observation scope", () => {
+test("validates the exact tenant, observation and Core assessment contract", () => {
   assert.equal(isMeasurementQuality(assessment, "tenant-a", "obs-1"), true);
   assert.equal(isMeasurementQuality(assessment, "tenant-b", "obs-1"), false);
   assert.equal(isMeasurementQuality(assessment, "tenant-a", "obs-2"), false);
   assert.equal(isMeasurementQuality({ ...assessment, status: "covered_by_verified_calibration" }, "tenant-a", "obs-1"), false);
+  assert.equal(isMeasurementQuality({ ...assessment, method_version: "9.9.9" }, "tenant-a", "obs-1"), false);
 });
 
-test("accepts failed and not_assessed results with explicit reason and nullable evidence links", () => {
-  for (const status of ["failed", "not_assessed"]) {
-    assert.equal(isMeasurementQuality({
-      ...assessment, status, reason_code: status === "failed" ? "outside_approved_policy_bounds" : "verified_calibration_missing_or_expired",
-      mapping_id: null, calibration_id: null, policy_id: null,
-    }, "tenant-a", "obs-1"), true);
-  }
-});
-
-test("rejects passed assessments without the complete evidence chain", () => {
+test("requires complete verified evidence for passed and failed policy outcomes", () => {
+  const failed = { ...assessment, status: "failed", reason_code: "outside_approved_policy_bounds" };
+  assert.equal(isMeasurementQuality(failed, "tenant-a", "obs-1"), true);
+  assert.equal(isMeasurementQuality({ ...failed, calibration_id: null }, "tenant-a", "obs-1"), false);
   assert.equal(isMeasurementQuality({ ...assessment, calibration_id: null }, "tenant-a", "obs-1"), false);
   assert.equal(isMeasurementQuality({ ...assessment, policy_id: 42 }, "tenant-a", "obs-1"), false);
+});
+
+test("accepts explicit not-assessed reasons with nullable evidence links", () => {
+  const reasons = [
+    "observation_not_verified", "observation_measurement_fields_invalid", "observation_provenance_invalid",
+    "non_field_evidence", "ambiguous_sensor_mapping", "verified_sensor_mapping_missing",
+    "ambiguous_verified_calibration", "verified_calibration_missing_or_expired",
+    "ambiguous_quality_policy", "approved_quality_policy_missing",
+  ];
+  for (const reason_code of reasons) {
+    assert.equal(isMeasurementQuality({
+      ...assessment, status: "not_assessed", reason_code,
+      mapping_id: null, calibration_id: null, policy_id: null,
+    }, "tenant-a", "obs-1"), true, reason_code);
+  }
+  assert.equal(isMeasurementQuality({
+    ...assessment, status: "not_assessed", reason_code: "unknown_reason",
+  }, "tenant-a", "obs-1"), false);
 });
 
 test("builds the exact POST assessment path and rejects malformed identifiers", () => {
