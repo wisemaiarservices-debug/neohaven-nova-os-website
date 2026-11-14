@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { readObservationMeasurementQuality, submitObservationVerification, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
+import { readObservationMeasurementQuality, submitObservationVerification, submitObservationReviewerChange, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
+import { submitSensorSourceMapping, type SensorMappingAction, type SensorSourceResult } from "../lib/novaSensorSourceClient";
+import { submitCalibrationGovernance, type CalibrationAction, type CalibrationGovernanceResult } from "../lib/novaCalibrationGovernanceClient";
+import { submitQualityPolicy, type QualityPolicyAction, type QualityPolicyResult } from "../lib/novaQualityPolicyClient";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, ShieldCheck, Trash2, Wifi, XCircle
@@ -301,6 +304,108 @@ function evidenceMessage(result: EvidenceReadResult | null): string {
   return messages[result.reason];
 }
 
+
+function SensorSourceMappingPanel() {
+  const [tenant,setTenant]=useState(""); const [site,setSite]=useState(""); const [asset,setAsset]=useState("");
+  const [action,setAction]=useState<SensorMappingAction>("register"); const [mapping,setMapping]=useState("");
+  const [source,setSource]=useState(""); const [sensor,setSensor]=useState(""); const [parameter,setParameter]=useState("");
+  const [unit,setUnit]=useState(""); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
+  const [method,setMethod]=useState(""); const [evidence,setEvidence]=useState(""); const [reason,setReason]=useState("");
+  const [confirm,setConfirm]=useState(false); const [loading,setLoading]=useState(false); const [result,setResult]=useState<SensorSourceResult|null>(null);
+  const controller=useRef<AbortController|null>(null);
+  useEffect(()=>()=>{controller.current?.abort();controller.current=null;},[]);
+  function clear(){controller.current?.abort();controller.current=null;setConfirm(false);setResult(null);setLoading(false);}
+  async function submit(){
+    controller.current?.abort(); const c=new AbortController();controller.current=c;setLoading(true);setConfirm(false);setResult(null);
+    const iso=(v:string)=>v?new Date(v).toISOString():"";
+    const r=await submitSensorSourceMapping({tenantId:tenant.trim(),siteId:site.trim(),assetId:asset.trim(),action,
+      mappingId:mapping.trim(),sourceId:source.trim(),sensorId:sensor.trim(),parameter:parameter.trim(),unit:unit.trim(),
+      effectiveFrom:action==="register"?iso(from):undefined,effectiveTo:action==="register"&&to?iso(to):undefined,
+      mappingMethod:method.trim(),evidenceRef:evidence.trim(),reason:reason.trim(),signal:c.signal});
+    if(!c.signal.aborted)setResult(r);
+    if(controller.current===c){controller.current=null;setLoading(false);}
+  }
+  const field=(label:string,value:string,set:(v:string)=>void,placeholder:string,type="text")=><label className="grid gap-1.5 text-[11px] text-muted-foreground">{label}<input type={type} value={value} disabled={loading} onChange={e=>{set(e.target.value);setConfirm(false);setResult(null);}} autoComplete="off" spellCheck={false} className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder={placeholder}/></label>;
+  const valid=tenant.trim()&&site.trim()&&asset.trim()&&evidence.trim()&&(action==="register"?mapping.trim()&&source.trim()&&sensor.trim()&&parameter.trim()&&unit.trim()&&from&&method.trim():mapping.trim()&&(action==="verify"||reason.trim()));
+  return <Panel title="Sensor-to-source identity mapping" subtitle="Register an explicit source-to-sensor relationship, then have an independent assigned site reviewer verify it. Core resolves only exact, effective-dated, verified mappings.">
+    <p className="mb-3 text-[11px] leading-5 text-muted-foreground">A registered mapping is unverified. A verified mapping records human approval of the declared identity and cited evidence; it does not prove physical installation, wiring, calibration, accuracy or connectivity. No fuzzy matching or unit conversion is performed.</p>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {field("Tenant ID",tenant,v=>{clear();setTenant(v);},"tenant-id")}
+      {field("Site ID",site,v=>{clear();setSite(v);},"site-id")}
+      {field("Asset ID",asset,v=>{clear();setAsset(v);},"asset-id")}
+      <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action<select value={action} disabled={loading} onChange={e=>{clear();setAction(e.target.value as SensorMappingAction);}} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground"><option value="register">Register mapping</option><option value="verify">Verify mapping</option><option value="reject">Reject mapping</option><option value="revoke">Revoke verified mapping</option></select></label>
+      {field(action==="register"?"New mapping ID":"Existing mapping ID",mapping,setMapping,"mapping-id")}
+      {action==="register"&&<>{field("Source ID",source,setSource,"source-id")}{field("Sensor ID",sensor,setSensor,"sensor-id")}{field("Parameter (exact metric name)",parameter,setParameter,"air_temperature")}{field("Unit (exact)",unit,setUnit,"degC")}{field("Effective from (local time; saved as UTC)",from,setFrom,"", "datetime-local")}{field("Effective to (optional local time; saved as UTC)",to,setTo,"","datetime-local")}{field("Mapping method",method,setMethod,"commissioning inspection")}</>}
+      {field("Evidence reference",evidence,setEvidence,"registered evidence identifier")}
+      {(action==="reject"||action==="revoke")&&field("Reason (required)",reason,setReason,"document the decision reason")}
+    </div>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] leading-5 text-muted-foreground">Registration requires tenant owner/admin. Review requires a separately assigned active reviewer; submitters cannot review their own mappings.</p><button type="button" disabled={!valid||loading} onClick={()=>setConfirm(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review mapping action</button></div>
+    {confirm&&<div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm sensor source mapping action"><div className="text-xs font-semibold text-amber-200">Confirm {action} action</div><p className="mt-2 break-words text-xs leading-5 text-muted-foreground">Submit {action} for mapping <strong className="text-foreground">{mapping}</strong>, asset <strong className="text-foreground">{asset}</strong>, site <strong className="text-foreground">{site}</strong>, tenant <strong className="text-foreground">{tenant}</strong>. Core enforces membership, site access, role and independent reviewer assignment.</p><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setConfirm(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button><button type="button" disabled={loading} onClick={()=>void submit()} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Confirm and submit</button></div></div>}
+    <p className="mt-3 text-xs text-muted-foreground" role="status" aria-live="polite">{result?.ok?"Core recorded "+String(result.data.status)+" · request "+result.requestId:result?"Core request not accepted: "+result.reason+(result.httpStatus?" (HTTP "+result.httpStatus+")":""):"No sensor mapping action submitted."}</p>
+  </Panel>;
+}
+
+
+function CalibrationGovernancePanel() {
+ const [tenant,setTenant]=useState("");const [site,setSite]=useState("");const [asset,setAsset]=useState("");const [calibration,setCalibration]=useState("");
+ const [action,setAction]=useState<CalibrationAction>("assign_reviewer");const [reviewer,setReviewer]=useState("");const [evidence,setEvidence]=useState("");const [reason,setReason]=useState("");
+ const [confirm,setConfirm]=useState(false);const [loading,setLoading]=useState(false);const [result,setResult]=useState<CalibrationGovernanceResult|null>(null);const controller=useRef<AbortController|null>(null);
+ useEffect(()=>()=>{controller.current?.abort();controller.current=null;},[]);
+ function reset(){controller.current?.abort();controller.current=null;setConfirm(false);setResult(null);setLoading(false);}
+ async function submit(){controller.current?.abort();const c=new AbortController();controller.current=c;setLoading(true);setConfirm(false);setResult(null);
+  const r=await submitCalibrationGovernance({tenant:tenant.trim(),site:site.trim(),asset:asset.trim(),action,calibrationId:calibration.trim(),reviewerSubject:reviewer.trim(),evidenceRef:evidence.trim(),reason:reason.trim(),signal:c.signal});
+  if(!c.signal.aborted)setResult(r);if(controller.current===c){controller.current=null;setLoading(false);}
+ }
+ const field=(label:string,value:string,set:(v:string)=>void,placeholder:string)=><label className="grid gap-1.5 text-[11px] text-muted-foreground">{label}<input value={value} disabled={loading} onChange={e=>{set(e.target.value);setConfirm(false);setResult(null);}} autoComplete="off" spellCheck={false} className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder={placeholder}/></label>;
+ const reviewerAction=action==="assign_reviewer"||action==="revoke_reviewer";
+ const requiresReason=action==="reject"||action==="revoke"||action==="revoke_reviewer";
+ const valid=tenant.trim()&&site.trim()&&asset.trim()&&evidence.trim()&&(reviewerAction?reviewer.trim():calibration.trim())&&(!requiresReason||reason.trim());
+ return <Panel title="Sensor calibration governance" subtitle="Assign independent calibration reviewers and record verification decisions against exact tenant, site, asset and calibration records.">
+  <p className="mb-3 text-[11px] leading-5 text-muted-foreground">Calibration verification requires an already registered certificate evidence record. For a verify action, the evidence reference must exactly match the calibration's registered certificate ID. The registry still labels uploaded laboratory reports as registered-unverified; this workflow does not accredit laboratories or prove metrological traceability.</p>
+  <div className="grid gap-3 sm:grid-cols-2">
+   {field("Tenant ID",tenant,v=>{reset();setTenant(v)},"tenant-id")}
+   {field("Site ID",site,v=>{reset();setSite(v)},"site-id")}
+   {field("Asset ID",asset,v=>{reset();setAsset(v)},"asset-id")}
+   <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action<select value={action} disabled={loading} onChange={e=>{reset();setAction(e.target.value as CalibrationAction)}} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
+    <option value="assign_reviewer">Assign calibration reviewer</option><option value="revoke_reviewer">Revoke calibration reviewer</option><option value="verify">Verify calibration</option><option value="reject">Reject calibration</option><option value="revoke">Revoke verified calibration</option>
+   </select></label>
+   {reviewerAction?field("Reviewer subject",reviewer,setReviewer,"active tenant member subject"):field("Calibration ID",calibration,setCalibration,"calibration-record-id")}
+   {field(reviewerAction?"Assignment evidence reference":"Certificate / decision evidence reference",evidence,setEvidence,"registered evidence identifier")}
+   {requiresReason&&field("Reason (required)",reason,setReason,"document the reason for this decision")}
+  </div>
+  <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] leading-5 text-muted-foreground">Core enforces tenant owner/admin reviewer assignment, active membership, independent review and valid lifecycle transitions. The reviewer actor is derived from Access authentication.</p><button type="button" disabled={!valid||loading} onClick={()=>setConfirm(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review calibration action</button></div>
+  {confirm&&<div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm calibration governance action"><div className="text-xs font-semibold text-amber-200">Confirm {action.replaceAll("_"," ")}</div><p className="mt-2 break-words text-xs leading-5 text-muted-foreground">Submit this action for tenant <strong className="text-foreground">{tenant}</strong>, site <strong className="text-foreground">{site}</strong>, asset <strong className="text-foreground">{asset}</strong>, {reviewerAction?"reviewer":"calibration"} <strong className="text-foreground">{reviewerAction?reviewer:calibration}</strong>. Core remains authoritative for all permission and evidence checks.</p><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setConfirm(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button><button type="button" disabled={loading} onClick={()=>void submit()} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Confirm and submit</button></div></div>}
+  <p className="mt-3 text-xs text-muted-foreground" role="status" aria-live="polite">{result?.ok?"Core recorded "+String(result.data.status??result.data.verification_status)+" · request "+result.requestId:result?"Core request not accepted: "+result.reason+(result.httpStatus?" (HTTP "+result.httpStatus+")":""):"No calibration governance action submitted."}</p>
+ </Panel>;
+}
+
+
+function QualityPolicyGovernancePanel(){
+ const [tenant,setTenant]=useState("");const [site,setSite]=useState("");const [asset,setAsset]=useState("");const [action,setAction]=useState<QualityPolicyAction>("register");const [policy,setPolicy]=useState("");const [sensor,setSensor]=useState("");const [parameter,setParameter]=useState("");const [unit,setUnit]=useState("");const [version,setVersion]=useState("1");const [minimum,setMinimum]=useState("");const [maximum,setMaximum]=useState("");const [from,setFrom]=useState("");const [to,setTo]=useState("");const [method,setMethod]=useState("");const [evidence,setEvidence]=useState("");const [reason,setReason]=useState("");const [confirm,setConfirm]=useState(false);const [loading,setLoading]=useState(false);const [result,setResult]=useState<QualityPolicyResult|null>(null);const controller=useRef<AbortController|null>(null);
+ useEffect(()=>()=>{controller.current?.abort();controller.current=null;},[]);
+ function reset(){controller.current?.abort();controller.current=null;setConfirm(false);setResult(null);setLoading(false)}
+ async function submit(){controller.current?.abort();const c=new AbortController();controller.current=c;setLoading(true);setConfirm(false);setResult(null);const iso=(v:string)=>v?new Date(v).toISOString():"";
+ const r=await submitQualityPolicy({tenant:tenant.trim(),site:site.trim(),asset:asset.trim(),action,policyId:policy.trim(),sensorId:sensor.trim(),parameter:parameter.trim(),unit:unit.trim(),version:version.trim(),minimum,maximum,from:action==="register"?iso(from):undefined,to:action==="register"&&to?iso(to):undefined,method:method.trim(),evidenceRef:evidence.trim(),reason:reason.trim(),signal:c.signal});
+ if(!c.signal.aborted)setResult(r);if(controller.current===c){controller.current=null;setLoading(false)}}
+ const field=(label:string,value:string,set:(v:string)=>void,placeholder:string,type="text")=><label className="grid gap-1.5 text-[11px] text-muted-foreground">{label}<input type={type} value={value} disabled={loading} onChange={e=>{set(e.target.value);setConfirm(false);setResult(null)}} autoComplete="off" spellCheck={false} className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder={placeholder}/></label>;
+ const registration=action==="register",needsReason=action==="reject"||action==="revoke";
+ const valid=tenant.trim()&&site.trim()&&asset.trim()&&policy.trim()&&evidence.trim()&&(registration?sensor.trim()&&parameter.trim()&&unit.trim()&&version.trim()&&(minimum!==""||maximum!=="")&&from&&method.trim():action==="verify"||reason.trim());
+ return <Panel title="Measurement quality policy governance" subtitle="Register explicit customer/site-specific numeric bounds and require independent measurement-reviewer approval before assessments can use them.">
+  <p className="mb-3 text-[11px] leading-5 text-muted-foreground">No default thresholds or automatic unit conversion. The policy applies only to its exact sensor, parameter, unit and effective interval. Registration is unverified until an assigned measurement reviewer approves it. A passed assessment means only that the recorded value falls within these approved bounds.</p>
+  <div className="grid gap-3 sm:grid-cols-2">
+   {field("Tenant ID",tenant,v=>{reset();setTenant(v)},"tenant-id")}{field("Site ID",site,v=>{reset();setSite(v)},"site-id")}{field("Asset ID",asset,v=>{reset();setAsset(v)},"asset-id")}
+   <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action<select value={action} disabled={loading} onChange={e=>{reset();setAction(e.target.value as QualityPolicyAction)}} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground"><option value="register">Register policy</option><option value="verify">Verify policy</option><option value="reject">Reject policy</option><option value="revoke">Revoke verified policy</option></select></label>
+   {field("Policy ID",policy,setPolicy,"policy-id")}
+   {registration&&<>{field("Sensor ID",sensor,setSensor,"sensor-id")}{field("Parameter (exact)",parameter,setParameter,"air_temperature")}{field("Unit (exact)",unit,setUnit,"degC")}{field("Policy version",version,setVersion,"1")}{field("Minimum value (optional)",minimum,setMinimum,"e.g. 0","number")}{field("Maximum value (optional)",maximum,setMaximum,"e.g. 45","number")}{field("Effective from (local time; saved as UTC)",from,setFrom,"","datetime-local")}{field("Effective to (optional local time; saved as UTC)",to,setTo,"","datetime-local")}{field("Policy method",method,setMethod,"customer-approved operating range")}</>}
+   {field("Evidence reference",evidence,setEvidence,"approved specification or evidence ID")}
+   {needsReason&&field("Reason (required)",reason,setReason,"document policy decision")}
+  </div>
+  <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] leading-5 text-muted-foreground">Core enforces tenant owner/admin registration, active assigned measurement reviewer, submitter independence and valid state transitions.</p><button type="button" disabled={!valid||loading} onClick={()=>setConfirm(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review policy action</button></div>
+  {confirm&&<div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm measurement quality policy action"><div className="text-xs font-semibold text-amber-200">Confirm {action} action</div><p className="mt-2 break-words text-xs leading-5 text-muted-foreground">Submit {action} for policy <strong className="text-foreground">{policy}</strong>, asset <strong className="text-foreground">{asset}</strong>, site <strong className="text-foreground">{site}</strong>, tenant <strong className="text-foreground">{tenant}</strong>. Core enforces permissions and evidence lifecycle.</p><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setConfirm(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button><button type="button" onClick={()=>void submit()} disabled={loading} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Confirm and submit</button></div></div>}
+  <p className="mt-3 text-xs text-muted-foreground" role="status" aria-live="polite">{result?.ok?"Core recorded "+String(result.data.status)+" · request "+result.requestId:result?"Core request not accepted: "+result.reason+(result.httpStatus?" (HTTP "+result.httpStatus+")":""):"No quality policy action submitted."}</p>
+ </Panel>;
+}
+
 function MeasurementEvidencePanel() {
   const [tenantId, setTenantId] = useState("");
   const [observationId, setObservationId] = useState("");
@@ -315,14 +420,27 @@ function MeasurementEvidencePanel() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewConfirmation, setReviewConfirmation] = useState(false);
   const reviewController = useRef<AbortController | null>(null);
+  const [reviewerSiteId, setReviewerSiteId] = useState("");
+  const [reviewerSubject, setReviewerSubject] = useState("");
+  const [reviewerAction, setReviewerAction] = useState<"assign" | "revoke">("assign");
+  const [reviewerEvidenceRef, setReviewerEvidenceRef] = useState("");
+  const [reviewerReason, setReviewerReason] = useState("");
+  const [reviewerResult, setReviewerResult] = useState<EvidenceReadResult | null>(null);
+  const [reviewerLoading, setReviewerLoading] = useState(false);
+  const [reviewerConfirmation, setReviewerConfirmation] = useState(false);
+  const reviewerController = useRef<AbortController | null>(null);
+
 
   useEffect(() => () => {
     const request = qualityController.current;
     const review = reviewController.current;
+    const reviewer = reviewerController.current;
     qualityController.current = null;
     reviewController.current = null;
+    reviewerController.current = null;
     request?.abort();
     review?.abort();
+    reviewer?.abort();
   }, []);
 
   async function loadQuality() {
@@ -361,13 +479,36 @@ function MeasurementEvidencePanel() {
     }
   }
 
+
+  async function submitReviewerChange() {
+    reviewerController.current?.abort();
+    const controller = new AbortController();
+    reviewerController.current = controller;
+    setReviewerLoading(true);
+    setReviewerConfirmation(false);
+    setReviewerResult(null);
+    const result = await submitObservationReviewerChange(
+      tenantId.trim(), reviewerSiteId.trim(), reviewerSubject.trim(), reviewerAction,
+      reviewerEvidenceRef.trim(), reviewerReason.trim(), controller.signal);
+    if (!controller.signal.aborted) setReviewerResult(result);
+    if (reviewerController.current === controller) {
+      reviewerController.current = null;
+      setReviewerLoading(false);
+    }
+  }
+
   function resetRequestsForIdentifierChange() {
     qualityController.current?.abort();
     reviewController.current?.abort();
+    reviewerController.current?.abort();
     qualityController.current = null;
     reviewController.current = null;
+    reviewerController.current = null;
     setQualityLoading(false);
     setReviewLoading(false);
+    setReviewerLoading(false);
+    setReviewerConfirmation(false);
+    setReviewerResult(null);
     setAssessmentConfirmation(false);
     setReviewConfirmation(false);
     setQualityResult(null);
@@ -430,6 +571,47 @@ function MeasurementEvidencePanel() {
       </dl>
     </Panel>}
 
+
+    <Panel title="Observation reviewer assignment" subtitle="Tenant owners and admins can assign or revoke site-scoped measurement reviewers. Core verifies tenant membership and permissions.">
+      <p className="mb-3 text-[11px] leading-5 text-muted-foreground">Reviewer subjects must identify an active member of this tenant. The actor must be a tenant owner or admin with site access. This console does not grant roles or bypass Core authorization.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Site ID
+          <input value={reviewerSiteId} disabled={reviewerLoading} onChange={event => { setReviewerSiteId(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} autoComplete="off" spellCheck={false} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="site-id" />
+        </label>
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Reviewer subject
+          <input value={reviewerSubject} disabled={reviewerLoading} onChange={event => { setReviewerSubject(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} autoComplete="off" spellCheck={false} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="Access-authenticated member subject" />
+        </label>
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action
+          <select value={reviewerAction} disabled={reviewerLoading} onChange={event => { setReviewerAction(event.target.value as "assign" | "revoke"); setReviewerConfirmation(false); setReviewerResult(null); }} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
+            <option value="assign">Assign measurement reviewer</option>
+            <option value="revoke">Revoke measurement reviewer</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Evidence reference
+          <input value={reviewerEvidenceRef} disabled={reviewerLoading} onChange={event => { setReviewerEvidenceRef(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} autoComplete="off" spellCheck={false} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="governance-approval-reference" />
+        </label>
+      </div>
+      {reviewerAction === "revoke" && <label className="mt-3 grid gap-1.5 text-[11px] text-muted-foreground">Revocation reason (required)
+        <textarea value={reviewerReason} disabled={reviewerLoading} onChange={event => { setReviewerReason(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} rows={3} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="Document why reviewer access is being revoked." />
+      </label>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[11px] leading-5 text-muted-foreground">Assignment and revocation are append-only governance events. Repeated or conflicting changes are rejected by Core.</p>
+        <button type="button" disabled={reviewerLoading || !tenantId.trim() || !reviewerSiteId.trim() || !reviewerSubject.trim() || !reviewerEvidenceRef.trim() || (reviewerAction === "revoke" && !reviewerReason.trim())} onClick={() => setReviewerConfirmation(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review reviewer change</button>
+      </div>
+      {reviewerConfirmation && <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm reviewer assignment change">
+        <div className="text-xs font-semibold text-amber-200">Confirm site reviewer governance change</div>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">You are about to {reviewerAction} <strong className="break-all text-foreground">{reviewerSubject.trim()}</strong> as a measurement reviewer for site <strong className="break-all text-foreground">{reviewerSiteId.trim()}</strong> in tenant <strong className="break-all text-foreground">{tenantId.trim()}</strong>. Core will enforce your tenant role, site grant and the target member's active membership.</p>
+        <div className="mt-3 flex justify-end gap-2">
+          <button type="button" onClick={() => setReviewerConfirmation(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button>
+          <button type="button" disabled={reviewerLoading} onClick={() => void submitReviewerChange()} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40">Confirm and submit</button>
+        </div>
+      </div>}
+      <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">{reviewerResult?.ok ? "Core recorded " + evidenceString(reviewerResult.data, "event_type") + " · request " + reviewerResult.requestId : reviewerResult ? evidenceMessage(reviewerResult) : "No reviewer assignment change submitted."}</p>
+    </Panel>
+
+    <SensorSourceMappingPanel />
+    <CalibrationGovernancePanel />
+    <QualityPolicyGovernancePanel />
     <Panel title="Observation verification" subtitle="Human reviewer decisions are recorded in NOVA Core as append-only evidence events. The authenticated reviewer identity is resolved server-side.">
       <p className="mb-3 text-[11px] leading-5 text-muted-foreground">The evidence reference is a reviewer-supplied pointer recorded in the event. This console does not upload, retrieve or authenticate the referenced material; verify it independently before submitting. A recorded reference is not proof that the underlying evidence is valid.</p>
       <div className="grid gap-3 sm:grid-cols-2">
