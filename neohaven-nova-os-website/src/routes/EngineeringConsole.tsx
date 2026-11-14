@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { readObservationMeasurementQuality, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
+import { readObservationMeasurementQuality, submitObservationVerification, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, ShieldCheck, Trash2, Wifi, XCircle
@@ -306,12 +306,23 @@ function MeasurementEvidencePanel() {
   const [observationId, setObservationId] = useState("");
   const [qualityResult, setQualityResult] = useState<EvidenceReadResult | null>(null);
   const [qualityLoading, setQualityLoading] = useState(false);
+  const [assessmentConfirmation, setAssessmentConfirmation] = useState(false);
   const qualityController = useRef<AbortController | null>(null);
+  const [reviewDecision, setReviewDecision] = useState<"verify" | "reject" | "revoke">("verify");
+  const [reviewEvidenceRef, setReviewEvidenceRef] = useState("");
+  const [reviewReason, setReviewReason] = useState("");
+  const [reviewResult, setReviewResult] = useState<EvidenceReadResult | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewConfirmation, setReviewConfirmation] = useState(false);
+  const reviewController = useRef<AbortController | null>(null);
 
   useEffect(() => () => {
     const request = qualityController.current;
+    const review = reviewController.current;
     qualityController.current = null;
+    reviewController.current = null;
     request?.abort();
+    review?.abort();
   }, []);
 
   async function loadQuality() {
@@ -319,6 +330,7 @@ function MeasurementEvidencePanel() {
     const controller = new AbortController();
     qualityController.current = controller;
     setQualityLoading(true);
+    setAssessmentConfirmation(false);
     setQualityResult(null);
     const result = await readObservationMeasurementQuality(
       tenantId.trim(), observationId.trim(), controller.signal);
@@ -327,6 +339,39 @@ function MeasurementEvidencePanel() {
       qualityController.current = null;
       setQualityLoading(false);
     }
+  }
+
+  async function submitReview() {
+    reviewController.current?.abort();
+    const controller = new AbortController();
+    reviewController.current = controller;
+    setReviewLoading(true);
+    setReviewConfirmation(false);
+    setReviewResult(null);
+    const result = await submitObservationVerification(
+      tenantId.trim(), observationId.trim(), reviewDecision,
+      reviewEvidenceRef.trim(), reviewReason.trim(), controller.signal);
+    if (!controller.signal.aborted) {
+      setReviewResult(result);
+      if (result.ok) setQualityResult(null);
+    }
+    if (reviewController.current === controller) {
+      reviewController.current = null;
+      setReviewLoading(false);
+    }
+  }
+
+  function resetRequestsForIdentifierChange() {
+    qualityController.current?.abort();
+    reviewController.current?.abort();
+    qualityController.current = null;
+    reviewController.current = null;
+    setQualityLoading(false);
+    setReviewLoading(false);
+    setAssessmentConfirmation(false);
+    setReviewConfirmation(false);
+    setQualityResult(null);
+    setReviewResult(null);
   }
 
   const quality = qualityResult?.ok ? qualityResult.data : null;
@@ -342,7 +387,7 @@ function MeasurementEvidencePanel() {
           ["Observation ID", observationId, setObservationId],
         ] as const).map(([label, value, setter]) => <label key={label} className="grid gap-1.5 text-[11px] text-muted-foreground">
           {label}
-          <input value={value} onChange={event => setter(event.target.value)} autoComplete="off" spellCheck={false}
+          <input value={value} onChange={event => { resetRequestsForIdentifierChange(); setter(event.target.value); }} autoComplete="off" spellCheck={false}
             className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
             placeholder={label.toLowerCase().replaceAll(" ", "-")} />
         </label>)}
@@ -352,10 +397,18 @@ function MeasurementEvidencePanel() {
           Requires an active Cloudflare Access browser session, configured tenant gateway and an authorized tenant read grant. This action submits a POST assessment request; it does not change the original observation.
         </p>
         <button type="button" disabled={qualityLoading || !tenantId.trim() || !observationId.trim()}
-          onClick={() => void loadQuality()} className="inline-flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">
-          <RefreshCw size={13} className={qualityLoading ? "animate-spin" : ""}/> Run assessment
+          onClick={() => setAssessmentConfirmation(true)} className="inline-flex shrink-0 items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">
+          <ShieldCheck size={13}/> Review assessment request
         </button>
       </div>
+      {assessmentConfirmation && <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm append-only assessment creation">
+        <div className="flex items-start gap-2 text-xs font-semibold text-amber-200"><ShieldAlert size={15} className="mt-0.5 shrink-0"/> Confirm append-only Core record creation</div>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">You are about to submit an assessment request for tenant <strong className="break-all text-foreground">{tenantId.trim()}</strong> and observation <strong className="break-all text-foreground">{observationId.trim()}</strong>. NOVA Core may create a new immutable assessment record. The source observation will not be modified. Repeated requests may return the existing idempotent result.</p>
+        <div className="mt-3 flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={() => setAssessmentConfirmation(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+          <button type="button" disabled={qualityLoading} onClick={() => void loadQuality()} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40"><ShieldCheck size={13}/> Confirm and create assessment</button>
+        </div>
+      </div>}
       <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">{evidenceMessage(qualityResult)}</p>
     </Panel>
 
@@ -376,6 +429,38 @@ function MeasurementEvidencePanel() {
         <div><dt className="text-muted-foreground">Approved quality policy</dt><dd className="mt-1 break-all">{evidenceString(quality, "policy_id")}</dd></div>
       </dl>
     </Panel>}
+
+    <Panel title="Observation verification" subtitle="Human reviewer decisions are recorded in NOVA Core as append-only evidence events. The authenticated reviewer identity is resolved server-side.">
+      <p className="mb-3 text-[11px] leading-5 text-muted-foreground">The evidence reference is a reviewer-supplied pointer recorded in the event. This console does not upload, retrieve or authenticate the referenced material; verify it independently before submitting. A recorded reference is not proof that the underlying evidence is valid.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Review decision
+          <select value={reviewDecision} disabled={reviewLoading} onChange={event => { setReviewDecision(event.target.value as "verify" | "reject" | "revoke"); setReviewConfirmation(false); setReviewResult(null); }} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
+            <option value="verify">Verify observation</option>
+            <option value="reject">Reject observation</option>
+            <option value="revoke">Revoke prior verification</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Evidence reference
+          <input value={reviewEvidenceRef} disabled={reviewLoading} onChange={event => { setReviewEvidenceRef(event.target.value); setReviewConfirmation(false); setReviewResult(null); }} autoComplete="off" spellCheck={false} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="evidence-record-or-review-reference" />
+        </label>
+      </div>
+      {reviewDecision !== "verify" && <label className="mt-3 grid gap-1.5 text-[11px] text-muted-foreground">Reason (required for reject or revoke)
+        <textarea value={reviewReason} disabled={reviewLoading} onChange={event => { setReviewReason(event.target.value); setReviewConfirmation(false); setReviewResult(null); }} rows={3} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="Document why this decision is appropriate." />
+      </label>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[11px] leading-5 text-muted-foreground">Requires an active measurement-reviewer assignment for the observation's site. Core rejects self-review and invalid state transitions. Rejection or revocation requires a reason.</p>
+        <button type="button" disabled={reviewLoading || !tenantId.trim() || !observationId.trim() || !reviewEvidenceRef.trim() || (reviewDecision !== "verify" && !reviewReason.trim())} onClick={() => setReviewConfirmation(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review decision</button>
+      </div>
+      {reviewConfirmation && <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm observation verification decision">
+        <div className="text-xs font-semibold text-amber-200">Confirm Core observation state change</div>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">You are about to {reviewDecision} observation <strong className="break-all text-foreground">{observationId.trim()}</strong> in tenant <strong className="break-all text-foreground">{tenantId.trim()}</strong>. This writes an append-only review event and may change the observation verification state. It does not alter the original measurement value.</p>
+        <div className="mt-3 flex justify-end gap-2">
+          <button type="button" onClick={() => setReviewConfirmation(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button>
+          <button type="button" disabled={reviewLoading} onClick={() => void submitReview()} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40">Confirm and submit decision</button>
+        </div>
+      </div>}
+      <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">{reviewResult?.ok ? "Core recorded " + evidenceString(reviewResult.data, "event_type") + " · request " + reviewResult.requestId : reviewResult ? evidenceMessage(reviewResult) : "No observation review submitted."}</p>
+    </Panel>
 
     <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] leading-5 text-amber-200/80">
       Passed means the observation value is within the explicit bounds of the independently approved policy after exact verified mapping and calibration checks. Failed means outside those bounds; it does not by itself mean unsafe or noncompliant. Not assessed means required evidence is missing, ambiguous, unverified or expired. The result does not prove scientific truth, laboratory accreditation or metrological traceability.
