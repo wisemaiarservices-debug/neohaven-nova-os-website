@@ -123,6 +123,84 @@ export async function submitObservationVerification(
   }
 }
 
+
+const OBSERVATION_REVIEWER_STATES = {
+  assign: { status: "active", event_type: "assigned" },
+  revoke: { status: "revoked", event_type: "revoked" },
+} as const;
+
+export function isObservationReviewerChange(
+  value: unknown, tenantId: string, siteId: string, reviewerSubject: string,
+  action: keyof typeof OBSERVATION_REVIEWER_STATES,
+): value is Record<string, unknown> {
+  const expected = OBSERVATION_REVIEWER_STATES[action];
+  return isRecord(value) && value.tenant_id === tenantId && value.site_id === siteId &&
+    value.reviewer_subject === reviewerSubject && value.reviewer_role === "measurement_reviewer" &&
+    value.status === expected.status && value.event_type === expected.event_type;
+}
+
+export async function submitObservationReviewerChange(
+  tenantId: string, siteId: string, reviewerSubject: string, action: "assign" | "revoke",
+  evidenceRef: string, reason: string, signal?: AbortSignal,
+): Promise<EvidenceReadResult> {
+  const validId = (value: string) => ID_PATTERN.test(value) && value.length <= 120;
+  if (!validId(tenantId) || !validId(siteId) || !isText(reviewerSubject) ||
+      reviewerSubject.length > 200 || /[\\u0000-\\u001f\\u007f]/.test(reviewerSubject) ||
+      !isText(evidenceRef) || evidenceRef.length > 500 ||
+      (action === "revoke" && (!isText(reason) || reason.length > 2000)) ||
+      (reason && reason.length > 2000)) {
+    return { ok: false, reason: "invalid_request", httpStatus: null };
+  }
+  const gateway = configuredGateway();
+  if (!gateway) return { ok: false, reason: "not_configured", httpStatus: null };
+  const path = "/api/v1/tenants/" + encodeURIComponent(tenantId) +
+    "/observations/reviewers/" + action;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
+  try {
+    const body = { site_id: siteId, reviewer_subject: reviewerSubject, evidence_ref: evidenceRef,
+      ...(action === "revoke" ? { reason } : {}) };
+    const response = await fetch(new URL(path, gateway), {
+      method: "POST", credentials: "include", cache: "no-store",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body), signal: controller.signal,
+    });
+    if (!response.ok) {
+      const failure = response.status === 401 || response.status === 403 ? "unauthorized"
+        : response.status === 404 ? "not_found"
+          : response.status >= 500 ? "unavailable" : "invalid_response";
+      return { ok: false, reason: failure, httpStatus: response.status };
+    }
+    const declaredLength = Number(response.headers.get("content-length") || 0);
+    if (declaredLength > MAX_RESPONSE_BYTES ||
+        !(response.headers.get("content-type") || "").toLowerCase().includes("application/json")) {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    const raw = await response.text();
+    if (new TextEncoder().encode(raw).byteLength > MAX_RESPONSE_BYTES) {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    let payload: unknown;
+    try { payload = JSON.parse(raw); } catch {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    if (!isRecord(payload) || !isRecord(payload.data) || !isText(payload.request_id) ||
+        payload.request_id !== response.headers.get("x-request-id") ||
+        !isObservationReviewerChange(payload.data, tenantId, siteId, reviewerSubject, action)) {
+      return { ok: false, reason: "invalid_response", httpStatus: response.status };
+    }
+    return { ok: true, data: payload.data, requestId: payload.request_id };
+  } catch {
+    if (controller.signal.aborted) return { ok: false, reason: "cancelled", httpStatus: null };
+    return { ok: false, reason: "unavailable", httpStatus: null };
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
 export function buildObservationQualityPath(tenantId: string, observationId: string): string | null {
   if (!ID_PATTERN.test(tenantId) || tenantId.length > 120 || !ID_PATTERN.test(observationId)) return null;
   return "/api/v1/tenants/" + encodeURIComponent(tenantId) + "/observations/" +
