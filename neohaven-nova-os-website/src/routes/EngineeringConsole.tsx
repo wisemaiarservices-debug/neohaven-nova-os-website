@@ -328,11 +328,14 @@ function MeasurementEvidencePanel() {
 
   useEffect(() => () => {
     const request = qualityController.current;
-    const review = reviewController.current;\n    const reviewer = reviewerController.current;
+    const review = reviewController.current;
+    const reviewer = reviewerController.current;
     qualityController.current = null;
-    reviewController.current = null;\n    reviewerController.current = null;
+    reviewController.current = null;
+    reviewerController.current = null;
     request?.abort();
-    review?.abort();\n    reviewer?.abort();
+    review?.abort();
+    reviewer?.abort();
   }, []);
 
   async function loadQuality() {
