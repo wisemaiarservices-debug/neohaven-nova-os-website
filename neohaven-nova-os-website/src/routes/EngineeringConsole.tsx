@@ -431,6 +431,7 @@ function MeasurementEvidencePanel() {
     </Panel>}
 
     <Panel title="Observation verification" subtitle="Human reviewer decisions are recorded in NOVA Core as append-only evidence events. The authenticated reviewer identity is resolved server-side.">
+      <p className="mb-3 text-[11px] leading-5 text-muted-foreground">The evidence reference is a reviewer-supplied pointer recorded in the event. This console does not upload, retrieve or authenticate the referenced material; verify it independently before submitting. A recorded reference is not proof that the underlying evidence is valid.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1.5 text-[11px] text-muted-foreground">Review decision
           <select value={reviewDecision} disabled={reviewLoading} onChange={event => { setReviewDecision(event.target.value as "verify" | "reject" | "revoke"); setReviewConfirmation(false); setReviewResult(null); }} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
