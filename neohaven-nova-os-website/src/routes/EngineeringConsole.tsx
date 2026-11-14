@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { readObservationMeasurementQuality, submitObservationVerification, submitObservationReviewerChange, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
+import { submitSensorSourceMapping, type SensorMappingAction, type SensorSourceResult } from "../lib/novaSensorSourceClient";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, ShieldCheck, Trash2, Wifi, XCircle
@@ -301,6 +302,47 @@ function evidenceMessage(result: EvidenceReadResult | null): string {
   return messages[result.reason];
 }
 
+
+function SensorSourceMappingPanel() {
+  const [tenant,setTenant]=useState(""); const [site,setSite]=useState(""); const [asset,setAsset]=useState("");
+  const [action,setAction]=useState<SensorMappingAction>("register"); const [mapping,setMapping]=useState("");
+  const [source,setSource]=useState(""); const [sensor,setSensor]=useState(""); const [parameter,setParameter]=useState("");
+  const [unit,setUnit]=useState(""); const [from,setFrom]=useState(""); const [to,setTo]=useState("");
+  const [method,setMethod]=useState(""); const [evidence,setEvidence]=useState(""); const [reason,setReason]=useState("");
+  const [confirm,setConfirm]=useState(false); const [loading,setLoading]=useState(false); const [result,setResult]=useState<SensorSourceResult|null>(null);
+  const controller=useRef<AbortController|null>(null);
+  useEffect(()=>()=>{controller.current?.abort();controller.current=null;},[]);
+  function clear(){controller.current?.abort();controller.current=null;setConfirm(false);setResult(null);setLoading(false);}
+  async function submit(){
+    controller.current?.abort(); const c=new AbortController();controller.current=c;setLoading(true);setConfirm(false);setResult(null);
+    const iso=(v:string)=>v?new Date(v).toISOString():"";
+    const r=await submitSensorSourceMapping({tenantId:tenant.trim(),siteId:site.trim(),assetId:asset.trim(),action,
+      mappingId:mapping.trim(),sourceId:source.trim(),sensorId:sensor.trim(),parameter:parameter.trim(),unit:unit.trim(),
+      effectiveFrom:action==="register"?iso(from):undefined,effectiveTo:action==="register"&&to?iso(to):undefined,
+      mappingMethod:method.trim(),evidenceRef:evidence.trim(),reason:reason.trim(),signal:c.signal});
+    if(!c.signal.aborted)setResult(r);
+    if(controller.current===c){controller.current=null;setLoading(false);}
+  }
+  const field=(label:string,value:string,set:(v:string)=>void,placeholder:string,type="text")=><label className="grid gap-1.5 text-[11px] text-muted-foreground">{label}<input type={type} value={value} disabled={loading} onChange={e=>{set(e.target.value);setConfirm(false);setResult(null);}} autoComplete="off" spellCheck={false} className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder={placeholder}/></label>;
+  const valid=tenant.trim()&&site.trim()&&asset.trim()&&evidence.trim()&&(action==="register"?mapping.trim()&&source.trim()&&sensor.trim()&&parameter.trim()&&unit.trim()&&from&&method.trim():mapping.trim()&&(action==="verify"||reason.trim()));
+  return <Panel title="Sensor-to-source identity mapping" subtitle="Register an explicit source-to-sensor relationship, then have an independent assigned site reviewer verify it. Core resolves only exact, effective-dated, verified mappings.">
+    <p className="mb-3 text-[11px] leading-5 text-muted-foreground">A registered mapping is unverified. A verified mapping records human approval of the declared identity and cited evidence; it does not prove physical installation, wiring, calibration, accuracy or connectivity. No fuzzy matching or unit conversion is performed.</p>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {field("Tenant ID",tenant,v=>{clear();setTenant(v);},"tenant-id")}
+      {field("Site ID",site,v=>{clear();setSite(v);},"site-id")}
+      {field("Asset ID",asset,v=>{clear();setAsset(v);},"asset-id")}
+      <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action<select value={action} disabled={loading} onChange={e=>{clear();setAction(e.target.value as SensorMappingAction);}} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground"><option value="register">Register mapping</option><option value="verify">Verify mapping</option><option value="reject">Reject mapping</option><option value="revoke">Revoke verified mapping</option></select></label>
+      {field(action==="register"?"New mapping ID":"Existing mapping ID",mapping,setMapping,"mapping-id")}
+      {action==="register"&&<>{field("Source ID",source,setSource,"source-id")}{field("Sensor ID",sensor,setSensor,"sensor-id")}{field("Parameter (exact metric name)",parameter,setParameter,"air_temperature")}{field("Unit (exact)",unit,setUnit,"degC")}{field("Effective from (UTC)",from,setFrom,"", "datetime-local")}{field("Effective to (optional UTC)",to,setTo,"","datetime-local")}{field("Mapping method",method,setMethod,"commissioning inspection")}</>}
+      {field("Evidence reference",evidence,setEvidence,"registered evidence identifier")}
+      {(action==="reject"||action==="revoke")&&field("Reason (required)",reason,setReason,"document the decision reason")}
+    </div>
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] leading-5 text-muted-foreground">Registration requires tenant owner/admin. Review requires a separately assigned active reviewer; submitters cannot review their own mappings.</p><button type="button" disabled={!valid||loading} onClick={()=>setConfirm(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review mapping action</button></div>
+    {confirm&&<div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm sensor source mapping action"><div className="text-xs font-semibold text-amber-200">Confirm {action} action</div><p className="mt-2 break-words text-xs leading-5 text-muted-foreground">Submit {action} for mapping <strong className="text-foreground">{mapping}</strong>, asset <strong className="text-foreground">{asset}</strong>, site <strong className="text-foreground">{site}</strong>, tenant <strong className="text-foreground">{tenant}</strong>. Core enforces membership, site access, role and independent reviewer assignment.</p><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={()=>setConfirm(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button><button type="button" disabled={loading} onClick={()=>void submit()} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Confirm and submit</button></div></div>}
+    <p className="mt-3 text-xs text-muted-foreground" role="status" aria-live="polite">{result?.ok?"Core recorded "+String(result.data.status)+" · request "+result.requestId:result?"Core request not accepted: "+result.reason+(result.httpStatus?" (HTTP "+result.httpStatus+")":""):"No sensor mapping action submitted."}</p>
+  </Panel>;
+}
+
 function MeasurementEvidencePanel() {
   const [tenantId, setTenantId] = useState("");
   const [observationId, setObservationId] = useState("");
@@ -504,6 +546,7 @@ function MeasurementEvidencePanel() {
       <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">{reviewerResult?.ok ? "Core recorded " + evidenceString(reviewerResult.data, "event_type") + " · request " + reviewerResult.requestId : reviewerResult ? evidenceMessage(reviewerResult) : "No reviewer assignment change submitted."}</p>
     </Panel>
 
+    <SensorSourceMappingPanel />
     <Panel title="Observation verification" subtitle="Human reviewer decisions are recorded in NOVA Core as append-only evidence events. The authenticated reviewer identity is resolved server-side.">
       <p className="mb-3 text-[11px] leading-5 text-muted-foreground">The evidence reference is a reviewer-supplied pointer recorded in the event. This console does not upload, retrieve or authenticate the referenced material; verify it independently before submitting. A recorded reference is not proof that the underlying evidence is valid.</p>
       <div className="grid gap-3 sm:grid-cols-2">
