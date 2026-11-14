@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { readObservationMeasurementQuality, submitObservationVerification, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
+import { readObservationMeasurementQuality, submitObservationVerification, submitObservationReviewerChange, type EvidenceReadResult } from "../lib/novaMeasurementEvidenceClient";
 import {
   Activity, ArrowLeft, CheckCircle2, Database, ExternalLink, FlaskConical,
   Gauge, Layers3, Plus, RefreshCw, Server, ShieldAlert, ShieldCheck, Trash2, Wifi, XCircle
@@ -315,14 +315,24 @@ function MeasurementEvidencePanel() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewConfirmation, setReviewConfirmation] = useState(false);
   const reviewController = useRef<AbortController | null>(null);
+  const [reviewerSiteId, setReviewerSiteId] = useState("");
+  const [reviewerSubject, setReviewerSubject] = useState("");
+  const [reviewerAction, setReviewerAction] = useState<"assign" | "revoke">("assign");
+  const [reviewerEvidenceRef, setReviewerEvidenceRef] = useState("");
+  const [reviewerReason, setReviewerReason] = useState("");
+  const [reviewerResult, setReviewerResult] = useState<EvidenceReadResult | null>(null);
+  const [reviewerLoading, setReviewerLoading] = useState(false);
+  const [reviewerConfirmation, setReviewerConfirmation] = useState(false);
+  const reviewerController = useRef<AbortController | null>(null);
+
 
   useEffect(() => () => {
     const request = qualityController.current;
-    const review = reviewController.current;
+    const review = reviewController.current;\n    const reviewer = reviewerController.current;
     qualityController.current = null;
-    reviewController.current = null;
+    reviewController.current = null;\n    reviewerController.current = null;
     request?.abort();
-    review?.abort();
+    review?.abort();\n    reviewer?.abort();
   }, []);
 
   async function loadQuality() {
@@ -358,6 +368,24 @@ function MeasurementEvidencePanel() {
     if (reviewController.current === controller) {
       reviewController.current = null;
       setReviewLoading(false);
+    }
+  }
+
+
+  async function submitReviewerChange() {
+    reviewerController.current?.abort();
+    const controller = new AbortController();
+    reviewerController.current = controller;
+    setReviewerLoading(true);
+    setReviewerConfirmation(false);
+    setReviewerResult(null);
+    const result = await submitObservationReviewerChange(
+      tenantId.trim(), reviewerSiteId.trim(), reviewerSubject.trim(), reviewerAction,
+      reviewerEvidenceRef.trim(), reviewerReason.trim(), controller.signal);
+    if (!controller.signal.aborted) setReviewerResult(result);
+    if (reviewerController.current === controller) {
+      reviewerController.current = null;
+      setReviewerLoading(false);
     }
   }
 
@@ -429,6 +457,44 @@ function MeasurementEvidencePanel() {
         <div><dt className="text-muted-foreground">Approved quality policy</dt><dd className="mt-1 break-all">{evidenceString(quality, "policy_id")}</dd></div>
       </dl>
     </Panel>}
+
+
+    <Panel title="Observation reviewer assignment" subtitle="Tenant owners and admins can assign or revoke site-scoped measurement reviewers. Core verifies tenant membership and permissions.">
+      <p className="mb-3 text-[11px] leading-5 text-muted-foreground">Reviewer subjects must identify an active member of this tenant. The actor must be a tenant owner or admin with site access. This console does not grant roles or bypass Core authorization.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Site ID
+          <input value={reviewerSiteId} disabled={reviewerLoading} onChange={event => { setReviewerSiteId(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} autoComplete="off" spellCheck={false} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="site-id" />
+        </label>
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Reviewer subject
+          <input value={reviewerSubject} disabled={reviewerLoading} onChange={event => { setReviewerSubject(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} autoComplete="off" spellCheck={false} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="Access-authenticated member subject" />
+        </label>
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Action
+          <select value={reviewerAction} disabled={reviewerLoading} onChange={event => { setReviewerAction(event.target.value as "assign" | "revoke"); setReviewerConfirmation(false); setReviewerResult(null); }} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
+            <option value="assign">Assign measurement reviewer</option>
+            <option value="revoke">Revoke measurement reviewer</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-[11px] text-muted-foreground">Evidence reference
+          <input value={reviewerEvidenceRef} disabled={reviewerLoading} onChange={event => { setReviewerEvidenceRef(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} autoComplete="off" spellCheck={false} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="governance-approval-reference" />
+        </label>
+      </div>
+      {reviewerAction === "revoke" && <label className="mt-3 grid gap-1.5 text-[11px] text-muted-foreground">Revocation reason (required)
+        <textarea value={reviewerReason} disabled={reviewerLoading} onChange={event => { setReviewerReason(event.target.value); setReviewerConfirmation(false); setReviewerResult(null); }} rows={3} className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground" placeholder="Document why reviewer access is being revoked." />
+      </label>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[11px] leading-5 text-muted-foreground">Assignment and revocation are append-only governance events. Repeated or conflicting changes are rejected by Core.</p>
+        <button type="button" disabled={reviewerLoading || !tenantId.trim() || !reviewerSiteId.trim() || !reviewerSubject.trim() || !reviewerEvidenceRef.trim() || (reviewerAction === "revoke" && !reviewerReason.trim())} onClick={() => setReviewerConfirmation(true)} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40">Review reviewer change</button>
+      </div>
+      {reviewerConfirmation && <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4" role="group" aria-label="Confirm reviewer assignment change">
+        <div className="text-xs font-semibold text-amber-200">Confirm site reviewer governance change</div>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">You are about to {reviewerAction} <strong className="break-all text-foreground">{reviewerSubject.trim()}</strong> as a measurement reviewer for site <strong className="break-all text-foreground">{reviewerSiteId.trim()}</strong> in tenant <strong className="break-all text-foreground">{tenantId.trim()}</strong>. Core will enforce your tenant role, site grant and the target member's active membership.</p>
+        <div className="mt-3 flex justify-end gap-2">
+          <button type="button" onClick={() => setReviewerConfirmation(false)} className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">Cancel</button>
+          <button type="button" disabled={reviewerLoading} onClick={() => void submitReviewerChange()} className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40">Confirm and submit</button>
+        </div>
+      </div>}
+      <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">{reviewerResult?.ok ? "Core recorded " + evidenceString(reviewerResult.data, "event_type") + " · request " + reviewerResult.requestId : reviewerResult ? evidenceMessage(reviewerResult) : "No reviewer assignment change submitted."}</p>
+    </Panel>
 
     <Panel title="Observation verification" subtitle="Human reviewer decisions are recorded in NOVA Core as append-only evidence events. The authenticated reviewer identity is resolved server-side.">
       <p className="mb-3 text-[11px] leading-5 text-muted-foreground">The evidence reference is a reviewer-supplied pointer recorded in the event. This console does not upload, retrieve or authenticate the referenced material; verify it independently before submitting. A recorded reference is not proof that the underlying evidence is valid.</p>
