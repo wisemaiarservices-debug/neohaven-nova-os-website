@@ -6,6 +6,7 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const MAX = 64 * 1024;
 function record(v: unknown): v is Record<string, unknown> { return v !== null && typeof v === "object" && !Array.isArray(v); }
 function text(v: unknown, max=2000): v is string { return typeof v === "string" && v.length > 0 && v.length <= max && v.trim() === v && !/[\u0000-\u001f\u007f]/.test(v); }
+export function isCanonicalUtcTimestamp(value: string): boolean { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value; }
 function gateway(): URL | null {
   const raw = import.meta.env.VITE_NOVA_TENANT_GATEWAY_URL;
   if (typeof raw !== "string" || !raw.trim()) return null;
@@ -30,8 +31,8 @@ export async function submitSensorSourceMapping(input: {
  if (![tenantId,siteId,assetId].every(x=>ID.test(x)&&x.length<=120) || !text(input.evidenceRef,500) ||
    (action==="register" && (![input.sourceId,input.sensorId].every(x=>!!x&&ID.test(x)) ||
      !text(input.parameter,120)||!text(input.unit,48)||!text(input.mappingMethod,160)||
-     !input.effectiveFrom||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(input.effectiveFrom)||!Number.isFinite(Date.parse(input.effectiveFrom))||
-     (input.effectiveTo!==undefined && input.effectiveTo!=="" && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(input.effectiveTo)||!Number.isFinite(Date.parse(input.effectiveTo))||input.effectiveTo<=input.effectiveFrom)))) ||
+     !input.effectiveFrom||!isCanonicalUtcTimestamp(input.effectiveFrom)||
+     (input.effectiveTo!==undefined && input.effectiveTo!=="" && (!isCanonicalUtcTimestamp(input.effectiveTo)||input.effectiveTo<=input.effectiveFrom)))) ||
    (action!=="register" && (!input.mappingId||!ID.test(input.mappingId))) ||
    (action!=="verify" && action!=="register" && !text(input.reason,2000))) return {ok:false,reason:"invalid_request",httpStatus:null};
  const base=gateway(); if(!base)return {ok:false,reason:"not_configured",httpStatus:null};
