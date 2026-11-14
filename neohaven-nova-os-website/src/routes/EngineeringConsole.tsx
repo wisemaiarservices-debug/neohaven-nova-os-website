@@ -344,7 +344,7 @@ function MeasurementEvidencePanel() {
           ["Observation ID", observationId, setObservationId],
         ] as const).map(([label, value, setter]) => <label key={label} className="grid gap-1.5 text-[11px] text-muted-foreground">
           {label}
-          <input value={value} onChange={event => { setter(event.target.value); setAssessmentConfirmation(false); setQualityResult(null); }} autoComplete="off" spellCheck={false}
+          <input value={value} onChange={event => { qualityController.current?.abort(); qualityController.current = null; setQualityLoading(false); setter(event.target.value); setAssessmentConfirmation(false); setQualityResult(null); }} autoComplete="off" spellCheck={false}
             className="min-w-0 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-primary"
             placeholder={label.toLowerCase().replaceAll(" ", "-")} />
         </label>)}
