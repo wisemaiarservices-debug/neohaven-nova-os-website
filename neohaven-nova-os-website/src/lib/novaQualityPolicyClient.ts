@@ -6,7 +6,7 @@ export function isQualityPolicyResponse(v:unknown,tenant:string,site:string,asse
  if(!rec(v))return false;
  if(action==="register")return v.id===policyId&&v.tenant_id===tenant&&v.site_id===site&&v.asset_id===asset&&v.status==="registered_unverified"&&txt(v.sensor_id)&&txt(v.parameter)&&txt(v.unit)&&txt(v.version);
  const status=action==="verify"?"verified":action==="reject"?"rejected":"revoked";
- return v.policy_id===policyId&&v.status===status&&txt(v.reviewer_subject,200);
+ return v.policy_id===policyId&&v.tenant_id===tenant&&v.site_id===site&&v.asset_id===asset&&v.status===status&&txt(v.reviewer_subject,200);
 }
 export async function submitQualityPolicy(input:{tenant:string;site:string;asset:string;action:QualityPolicyAction;policyId:string;sensorId?:string;parameter?:string;unit?:string;version?:string;minimum?:string;maximum?:string;from?:string;to?:string;method?:string;evidenceRef:string;reason?:string;signal?:AbortSignal}):Promise<QualityPolicyResult>{
  const {tenant,site,asset,action,policyId}=input;
