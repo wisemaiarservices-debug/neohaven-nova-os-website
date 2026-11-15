@@ -20,7 +20,7 @@ export function isSensorMappingResponse(v: unknown, tenant: string, site: string
     text(v.id) && v.status === "registered_unverified" && text(v.source_id) && text(v.sensor_id) &&
     text(v.parameter) && text(v.unit);
   const status = action === "verify" ? "verified" : action === "reject" ? "rejected" : "revoked";
-  return v.mapping_id === mappingId && v.status === status && text(v.reviewer_subject);
+  return v.mapping_id === mappingId && v.tenant_id === tenant && v.site_id === site && v.asset_id === asset && v.status === status && text(v.reviewer_subject);
 }
 export async function submitSensorSourceMapping(input: {
  tenantId:string; siteId:string; assetId:string; action:SensorMappingAction; mappingId?:string;
