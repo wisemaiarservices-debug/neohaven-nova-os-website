@@ -2,3 +2,12 @@ import test from "node:test";import assert from "node:assert/strict";import {isQ
 const registered={id:"p1",tenant_id:"t1",site_id:"s1",asset_id:"a1",sensor_id:"sensor1",parameter:"air_temperature",unit:"degC",version:"v1",status:"registered_unverified"};
 test("validates exact quality policy registration scope",()=>{assert.equal(isQualityPolicyResponse(registered,"t1","s1","a1","register","p1"),true);assert.equal(isQualityPolicyResponse({...registered,tenant_id:"t2"},"t1","s1","a1","register","p1"),false);assert.equal(isQualityPolicyResponse({...registered,status:"verified"},"t1","s1","a1","register","p1"),false)});
 test("validates exact policy lifecycle outcome",()=>{const v={policy_id:"p1",status:"verified",reviewer_subject:"reviewer"};assert.equal(isQualityPolicyResponse(v,"t1","s1","a1","verify","p1"),true);assert.equal(isQualityPolicyResponse({...v,policy_id:"p2"},"t1","s1","a1","verify","p1"),false);assert.equal(isQualityPolicyResponse({...v,status:"rejected"},"t1","s1","a1","verify","p1"),false)});
+test("validates exact tenant site and asset scope for policy lifecycle responses",()=>{
+ const v={policy_id:"p1",tenant_id:"t1",site_id:"s1",asset_id:"a1",status:"verified",reviewer_subject:"reviewer"};
+ assert.equal(isQualityPolicyResponse(v,"t1","s1","a1","verify","p1"),true);
+ assert.equal(isQualityPolicyResponse({...v,tenant_id:"t2"},"t1","s1","a1","verify","p1"),false);
+ assert.equal(isQualityPolicyResponse({...v,site_id:"s2"},"t1","s1","a1","verify","p1"),false);
+ assert.equal(isQualityPolicyResponse({...v,asset_id:"a2"},"t1","s1","a1","verify","p1"),false);
+ assert.equal(isQualityPolicyResponse({...v,policy_id:"p2"},"t1","s1","a1","verify","p1"),false);
+ assert.equal(isQualityPolicyResponse({...v,status:"rejected"},"t1","s1","a1","verify","p1"),false);
+});
