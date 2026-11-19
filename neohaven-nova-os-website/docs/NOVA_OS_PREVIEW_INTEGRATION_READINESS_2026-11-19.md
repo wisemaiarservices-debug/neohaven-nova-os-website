@@ -97,3 +97,28 @@ The source-level request/response contracts are aligned for these two lifecycle 
 This inspection does not prove that the deployed gateway routes these requests to those exact Core handlers, that the browser environment has the gateway URL configured, that Cloudflare Access and CORS are correct, or that tenant identity is bound to the verified Access subject in the live Worker. It also does not validate reviewer membership or authorization against a live database. No live endpoint was called and no credentials were used.
 
 The frontend currently fails closed when the gateway URL is absent or invalid. This is the correct preview default; do not fill it with the public Core API origin as a workaround.
+
+## Cloudflare tenant gateway source audit — 2026-11-19
+
+Reviewed the tenant gateway and private tenant API source/configuration on Core #266 head `e157555927f85a30a04366c4317a32b00b0fa42c`.
+
+### Source-level safeguards observed
+
+- Human Access tokens are independently verified by the gateway using RS256 and a configured issuer/audience; the verifier rejects service-token identity shapes, unsupported JWT algorithms/remote key headers, malformed/oversized JWKS, expired tokens and invalid time claims.
+- The gateway constructs a fresh internal request. It does not forward browser cookies or caller-supplied identity headers; the verified subject, issuer/audience, timestamp, request ID, body digest and applicable token/idempotency digests are HMAC-signed.
+- The private API is configured with `workers_dev = false` and `preview_urls = false`, and its Wrangler config declares no public route/custom domain. The gateway config likewise disables workers.dev/preview URLs and declares only the `TENANT_API` Service Binding to `nova-core-tenant-api`.
+- Gateway source enforces exact-origin credentialed CORS, bounded JSON, explicit route allowlists and request-ID exposure. The local gateway integration suite exercises JWT verification, HMAC envelope forwarding, tenant/resource authorization, cross-tenant denial and caller identity-header/cookie isolation.
+
+### Deployment and configuration blockers
+
+- The repository's current `.github/workflows/cloudflare-worker-deploy.yml` deploys the separate Python Core API Worker. The inspected workflow tree contains no dedicated deploy workflow for the tenant gateway/private tenant API.
+- `apps/tenant-gateway/wrangler.toml` contains the private Service Binding but no public route/custom hostname and no `[vars]` values for `ACCESS_ISSUER`, `ACCESS_AUDIENCE`, or `CORS_ALLOWED_ORIGINS`. The internal HMAC secret is intentionally not in source. The private API D1 binding and secrets are also intentionally absent from its production Wrangler config.
+- The gateway README explicitly states that Access application/policy, secrets, D1, hostname and routes are not provisioned. The repository does not establish that any of these exist in the Cloudflare account.
+- CORS documentation previously omitted `Authorization` and `Idempotency-Key`, although gateway code and tests allow them. Core PR #295 is a draft documentation-only correction that also makes the CORS variable and missing gateway deployment automation explicit.
+- The Access application's real preflight behavior, service binding isolation at Cloudflare edge, secret parity, D1 deployment/migration state, actual environment variables, and custom hostname routing remain unverified.
+
+### Decision
+
+The source architecture is coherent enough to continue code review and local integration testing, but there is no verified deployed tenant gateway. Do not set the frontend gateway URL to the public Core API hostname, do not create a public Worker route as a shortcut, and do not enable live evidence actions until a separately reviewed Cloudflare deployment plan, exact Access/CORS configuration, private Worker binding, secret provisioning, disposable D1 tests and independent security review are complete.
+
+This was a read-only source/configuration audit plus documentation PR creation. No Cloudflare account settings, Access policies, secrets, D1, hostnames, routes, deployment state, customer data or paid resources were touched.
