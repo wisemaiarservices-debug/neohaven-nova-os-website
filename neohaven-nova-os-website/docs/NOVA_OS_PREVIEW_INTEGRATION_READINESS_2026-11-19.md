@@ -70,3 +70,30 @@ At this audit checkpoint, Core PRs #178 and #179 and website PRs #11 and #12 are
 **Live tenant integration / staging: blocked pending gateway and Access verification, Core #178/#179 contract integration, independent security review, and authorized two-tenant end-to-end tests.**
 
 **Production: not approved.**
+
+## Detailed source-contract verification — 2026-11-19
+
+The four dependent PR patches and the corresponding Core service/client source files were inspected at their recorded branches.
+
+### Measurement-quality policy review
+
+- Core PR #178 changes the review response to include `policy_id`, `tenant_id`, `site_id`, `asset_id`, lifecycle `status`, and `reviewer_subject`.
+- The Core handler resolves the policy using the exact tenant/site/asset/policy tuple, requires an active assigned measurement reviewer, and rejects the original submitter reviewing their own policy.
+- Website PR #11 validates the same identifiers and the expected lifecycle status before treating the response as successful.
+- The browser client also requires a bounded JSON response, matching `request_id` and `x-request-id` header, and exact response scope.
+
+### Sensor-source mapping review
+
+- Core PR #179 changes mapping review responses to include `mapping_id`, `tenant_id`, `site_id`, `asset_id`, lifecycle `status`, and `reviewer_subject`.
+- Reviewer assignment/revocation responses include `tenant_id`, `site_id`, `reviewer_subject`, and the resulting status.
+- The Core handler requires an active assigned reviewer and rejects self-review by the mapping submitter.
+- Website PR #12 validates exact tenant/site/asset scope, mapping identity and expected lifecycle status.
+- The browser client also checks the bounded JSON envelope and request-ID correlation.
+
+### What this establishes — and what it does not
+
+The source-level request/response contracts are aligned for these two lifecycle actions, assuming the corresponding Core and website PRs are integrated in the intended dependency order. Their recorded unit/CI results support the code-level contract.
+
+This inspection does not prove that the deployed gateway routes these requests to those exact Core handlers, that the browser environment has the gateway URL configured, that Cloudflare Access and CORS are correct, or that tenant identity is bound to the verified Access subject in the live Worker. It also does not validate reviewer membership or authorization against a live database. No live endpoint was called and no credentials were used.
+
+The frontend currently fails closed when the gateway URL is absent or invalid. This is the correct preview default; do not fill it with the public Core API origin as a workaround.
